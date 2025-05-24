@@ -1,11 +1,11 @@
 from datetime import timedelta, datetime, timezone
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.config import settings
-from app.core.security import create_access_token, verify_password, decrypt_password, get_password_hash
+from app.core.security import create_access_token, verify_password, decrypt_password, get_password_hash, encrypt_password
 from app.db.session import get_db
 from app.models.public import User, Menu, Api, Role, RoleMenu, RoleApi, UserRole
 from app.schemas.token import Token, LoginRequest, JWTPayload, JWTOut
@@ -13,9 +13,11 @@ from app.schemas.user import UserCreate, UserResponse, UserInfoResponse, UpdateP
 from app.schemas.menu import MenuResponse
 from app.schemas.common import Success
 from app.api.v1 import user, role, menu, api, tenant, log
-from app.deps import get_current_user
+from app.deps import get_current_user, get_current_active_superuser
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # 注册所有子路由
 router.include_router(user.router, prefix="/user", tags=["user"])
@@ -288,4 +290,74 @@ async def register_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return Success(data=user) 
+    return Success(data=user)
+
+@router.post("/user/create", response_model=Success[UserResponse])
+async def create_user(
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+) -> Any:
+    """
+    创建用户
+    """
+    try:
+        logger.info(f"开始创建用户，请求数据: {user_in.dict()}")
+        
+        # 检查用户名是否已存在
+        result = await db.execute(
+            select(User).where(User.username == user_in.username)
+        )
+        if result.scalar_one_or_none():
+            logger.error(f"用户名已存在: {user_in.username}")
+            raise HTTPException(
+                status_code=400,
+                detail="用户名已存在"
+            )
+        
+        # 检查租户是否存在
+        if user_in.tenant_id:
+            result = await db.execute(
+                select(User).where(User.id == user_in.tenant_id)
+            )
+            if not result.scalar_one_or_none():
+                logger.error(f"租户不存在: {user_in.tenant_id}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="租户不存在"
+                )
+        
+        # 创建用户
+        user = User(
+            username=user_in.username,
+            password=encrypt_password(user_in.password),
+            email=user_in.email,
+            phone=user_in.phone,
+            is_active=user_in.is_active,
+            user_type=user_in.user_type,
+            tenant_id=user_in.tenant_id,
+            is_tenant_admin=user_in.is_tenant_admin
+        )
+        
+        db.add(user)
+        await db.flush()
+        
+        # 如果指定了角色，为用户分配角色
+        if user_in.role_ids:
+            for role_id in user_in.role_ids:
+                user_role = UserRole(user_id=user.id, role_id=role_id)
+                db.add(user_role)
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"用户创建成功: {user.username}")
+        return Success(data=user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"创建用户时发生错误: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"创建用户失败: {str(e)}"
+        ) 

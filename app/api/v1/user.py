@@ -32,6 +32,23 @@ async def create_user(
             detail="用户名已存在"
         )
     
+    # 权限校验
+    if current_user.is_superuser or current_user.user_type == "system_admin":
+        # 超级管理员和系统管理员可以为所有租户创建用户
+        pass
+    elif current_user.user_type == "tenant_admin":
+        # 租户管理员只能为自己租户创建用户
+        if user_in.tenant_id != current_user.tenant_id:
+            raise HTTPException(
+                status_code=403,
+                detail="租户管理员只能为自己租户创建用户"
+            )
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="没有创建用户的权限"
+        )
+    
     try:
         # 解密密码
         decrypted_password = decrypt_password(user_in.password)
@@ -45,27 +62,45 @@ async def create_user(
     user = User(
         username=user_in.username,
         email=user_in.email,
+        phone=user_in.phone,
         password=get_password_hash(decrypted_password),
         is_active=user_in.is_active,
         is_superuser=user_in.is_superuser,
         user_type=user_in.user_type,
-        tenant_id=current_user.tenant_id
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    # 记录审计日志
-    await log_audit(
-        user_id=current_user.id,
-        action="create",
-        resource_type="user",
-        resource_id=user.id,
-        details=f"Created new user: {user.username}",
-        request=request
+        tenant_id=user_in.tenant_id,
+        is_tenant_admin=user_in.is_tenant_admin
     )
     
-    return Success(data=user)
+    try:
+        db.add(user)
+        await db.flush()
+        
+        # 如果指定了角色，为用户分配角色
+        if user_in.role_ids:
+            for role_id in user_in.role_ids:
+                user_role = UserRole(user_id=user.id, role_id=role_id)
+                db.add(user_role)
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        # 记录审计日志
+        await log_audit(
+            user_id=current_user.id,
+            action="create",
+            resource_type="user",
+            resource_id=user.id,
+            details=f"Created new user: {user.username}",
+            request=request
+        )
+        
+        return Success(data=user)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"创建用户失败: {str(e)}"
+        )
 
 @router.get("/list", response_model=Success[dict])
 async def get_users(

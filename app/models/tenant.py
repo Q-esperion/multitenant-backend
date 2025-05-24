@@ -30,9 +30,9 @@ class Student(BaseModel):
     name = Column(String(50), nullable=False)
     gender = Column(String(10))
     birth_date = Column(Date)
-    admission_batch_id = Column(Integer, ForeignKey("admission_batches.id"))
-    department_id = Column(Integer, ForeignKey("departments.id"))
-    dormitory_id = Column(Integer, ForeignKey("dormitories.id"))
+    admission_batch_id = Column(Integer)
+    department_id = Column(Integer)
+    dormitory_id = Column(Integer)
     phone = Column(String(20))
     email = Column(String(100))
     address = Column(String(200))
@@ -67,7 +67,7 @@ class Staff(BaseModel):
     gender = Column(String(10))
     phone = Column(String(20))
     email = Column(String(100))
-    department_id = Column(Integer, ForeignKey("departments.id"))
+    department_id = Column(Integer)
     position = Column(String(50))
     status = Column(Boolean, default=True)
 
@@ -80,14 +80,23 @@ class RegistrationProcess(BaseModel):
     is_required = Column(Boolean, default=True)
     status = Column(Boolean, default=True)
 
+class InfoEntryProcess(BaseModel):
+    __tablename__ = "info_entry_processes"
+    
+    name = Column(String(100), nullable=False, unique=True)
+    order = Column(Integer, nullable=False)
+    description = Column(String(500))
+    is_required = Column(Boolean, default=True)
+    status = Column(Boolean, default=True)
+
 class RegistrationInfo(BaseModel):
     __tablename__ = "registration_info"
     
-    student_id = Column(String(50), ForeignKey("students.student_id"), nullable=False)
-    process_id = Column(Integer, ForeignKey("registration_processes.id"), nullable=False)
+    student_id = Column(String(50), nullable=False)
+    process_id = Column(Integer, nullable=False)
     status = Column(Boolean, default=False)
     completed_at = Column(DateTime)
-    operator_id = Column(Integer, ForeignKey("staff.id"))
+    operator_id = Column(Integer)
     remarks = Column(Text)
 
 class FieldMapping(BaseModel):

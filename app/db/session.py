@@ -1,26 +1,18 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+"""
+数据库会话管理
+"""
+
+from typing import AsyncGenerator
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
+from app import async_session
 from app.core.config import settings
 
-# 创建异步数据库引擎
-engine = create_async_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    echo=settings.DEBUG,
-    future=True
-)
-
-# 创建异步会话工厂
-async_session = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False
-)
-
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    获取数据库会话的依赖函数
+    获取数据库会话
     """
     async with async_session() as session:
         try:
@@ -28,10 +20,13 @@ async def get_db() -> AsyncSession:
         finally:
             await session.close()
 
-async def get_tenant_db(tenant_id: int):
+async def get_tenant_db(tenant_id: int) -> AsyncGenerator[AsyncSession, None]:
+    """
+    获取租户数据库会话
+    """
     schema_name = f"tenant_{tenant_id}"
     engine = create_async_engine(
-        settings.DATABASE_URL,
+        settings.SQLALCHEMY_DATABASE_URI,
         echo=settings.DEBUG,
         future=True,
         connect_args={"options": f"-csearch_path={schema_name}"}
@@ -49,4 +44,5 @@ async def get_tenant_db(tenant_id: int):
         try:
             yield session
         finally:
-            await session.close() 
+            await session.close()
+            await engine.dispose() 
