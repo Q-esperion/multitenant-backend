@@ -6,11 +6,11 @@ from app.db.session import get_db
 from app.deps import get_current_user
 from app.models.public import Api, User
 from app.schemas.api import ApiCreate, ApiUpdate, ApiResponse
-from app.schemas.common import Success
+from app.schemas.common import Success, SuccessExtra
 
 router = APIRouter()
 
-@router.get("/list", response_model=Success[dict])
+@router.get("/list")
 async def get_apis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -37,14 +37,9 @@ async def get_apis(
     result = await db.execute(query)
     apis = result.scalars().all()
     
-    return Success(data={
-        "items": apis,
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    })
+    return SuccessExtra(data=apis, total=total, page=page, page_size=page_size)
 
-@router.get("/get", response_model=Success[ApiResponse])
+@router.get("/get")
 async def get_api(
     id: int,
     db: AsyncSession = Depends(get_db),
@@ -62,7 +57,7 @@ async def get_api(
         )
     return Success(data=api)
 
-@router.post("/create", response_model=Success[ApiResponse])
+@router.post("/create")
 async def create_api(
     api_in: ApiCreate,
     db: AsyncSession = Depends(get_db),
@@ -80,7 +75,7 @@ async def create_api(
     await db.refresh(api)
     return Success(data=api)
 
-@router.delete("/delete", response_model=Success[dict])
+@router.delete("/delete")
 async def delete_api(
     api_id: int,
     db: AsyncSession = Depends(get_db),
@@ -101,7 +96,7 @@ async def delete_api(
     await db.commit()
     return Success(data={"message": "API deleted successfully"})
 
-@router.post("/refresh", response_model=Success[dict])
+@router.post("/refresh")
 async def refresh_apis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

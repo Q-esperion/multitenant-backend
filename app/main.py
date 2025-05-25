@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import base
+from app.api.v1.router import router as v1_router
 from app.middleware.logging import LoggingMiddleware
 from app.core.log import get_logger
 
@@ -29,8 +29,8 @@ logger.debug("添加日志中间件")
 app.add_middleware(LoggingMiddleware)
 
 # 注册路由
-logger.debug("注册基础路由")
-app.include_router(base.router, prefix=f"{settings.API_V1_STR}/base")
+logger.debug("注册v1版本路由")
+app.include_router(v1_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 async def root():

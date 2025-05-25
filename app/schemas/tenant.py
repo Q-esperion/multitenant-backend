@@ -1,17 +1,18 @@
 from datetime import datetime, date
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import Field
 from app.models.public import TenantStatus
+from app.schemas.common import BaseSchema
 
 # 基础模型
-class AdmissionBatchBase(BaseModel):
+class AdmissionBatchBase(BaseSchema):
     name: str
     start_date: date
     end_date: date
     is_active: bool = False
     description: Optional[str] = None
 
-class DepartmentBase(BaseModel):
+class DepartmentBase(BaseSchema):
     name: str
     code: Optional[str] = None
     parent_id: Optional[int] = None
@@ -21,7 +22,7 @@ class DepartmentBase(BaseModel):
     email: Optional[str] = None
     status: bool = True
 
-class StudentBase(BaseModel):
+class StudentBase(BaseSchema):
     id_card: str
     student_id: str
     name: str
@@ -45,14 +46,14 @@ class StudentBase(BaseModel):
     ext_field9: Optional[str] = None
     ext_field10: Optional[str] = None
 
-class DormitoryBase(BaseModel):
+class DormitoryBase(BaseSchema):
     building: str
     room_number: str
     capacity: int = 4
     current_count: int = 0
     status: bool = True
 
-class StaffBase(BaseModel):
+class StaffBase(BaseSchema):
     username: str
     password: str
     name: str
@@ -63,21 +64,21 @@ class StaffBase(BaseModel):
     position: Optional[str] = None
     status: bool = True
 
-class RegistrationProcessBase(BaseModel):
+class RegistrationProcessBase(BaseSchema):
     name: str
     order: int
     description: Optional[str] = None
     is_required: bool = True
     status: bool = True
 
-class InfoEntryProcessBase(BaseModel):
+class InfoEntryProcessBase(BaseSchema):
     name: str
     order: int
     description: Optional[str] = None
     is_required: bool = True
     status: bool = True
 
-class RegistrationInfoBase(BaseModel):
+class RegistrationInfoBase(BaseSchema):
     student_id: str
     process_id: int
     status: bool = False
@@ -85,7 +86,7 @@ class RegistrationInfoBase(BaseModel):
     operator_id: Optional[int] = None
     remarks: Optional[str] = None
 
-class FieldMappingBase(BaseModel):
+class FieldMappingBase(BaseSchema):
     field_name: str
     display_name: str
     is_required: bool = False
@@ -111,6 +112,9 @@ class StaffCreate(StaffBase):
 class RegistrationProcessCreate(RegistrationProcessBase):
     pass
 
+class InfoEntryProcessCreate(InfoEntryProcessBase):
+    pass
+
 class RegistrationInfoCreate(RegistrationInfoBase):
     pass
 
@@ -118,14 +122,14 @@ class FieldMappingCreate(FieldMappingBase):
     pass
 
 # 更新模型
-class AdmissionBatchUpdate(BaseModel):
+class AdmissionBatchUpdate(BaseSchema):
     name: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     is_active: Optional[bool] = None
     description: Optional[str] = None
 
-class DepartmentUpdate(BaseModel):
+class DepartmentUpdate(BaseSchema):
     name: Optional[str] = None
     code: Optional[str] = None
     parent_id: Optional[int] = None
@@ -135,7 +139,7 @@ class DepartmentUpdate(BaseModel):
     email: Optional[str] = None
     status: Optional[bool] = None
 
-class StudentUpdate(BaseModel):
+class StudentUpdate(BaseSchema):
     student_id: Optional[str] = None
     name: Optional[str] = None
     gender: Optional[str] = None
@@ -158,14 +162,14 @@ class StudentUpdate(BaseModel):
     ext_field9: Optional[str] = None
     ext_field10: Optional[str] = None
 
-class DormitoryUpdate(BaseModel):
+class DormitoryUpdate(BaseSchema):
     building: Optional[str] = None
     room_number: Optional[str] = None
     capacity: Optional[int] = None
     current_count: Optional[int] = None
     status: Optional[bool] = None
 
-class StaffUpdate(BaseModel):
+class StaffUpdate(BaseSchema):
     username: Optional[str] = None
     password: Optional[str] = None
     name: Optional[str] = None
@@ -176,14 +180,14 @@ class StaffUpdate(BaseModel):
     position: Optional[str] = None
     status: Optional[bool] = None
 
-class RegistrationProcessUpdate(BaseModel):
+class RegistrationProcessUpdate(BaseSchema):
     name: Optional[str] = None
     order: Optional[int] = None
     description: Optional[str] = None
     is_required: Optional[bool] = None
     status: Optional[bool] = None
 
-class RegistrationInfoUpdate(BaseModel):
+class RegistrationInfoUpdate(BaseSchema):
     student_id: Optional[str] = None
     process_id: Optional[int] = None
     status: Optional[bool] = None
@@ -191,7 +195,7 @@ class RegistrationInfoUpdate(BaseModel):
     operator_id: Optional[int] = None
     remarks: Optional[str] = None
 
-class FieldMappingUpdate(BaseModel):
+class FieldMappingUpdate(BaseSchema):
     field_name: Optional[str] = None
     display_name: Optional[str] = None
     is_required: Optional[bool] = None
@@ -204,65 +208,41 @@ class AdmissionBatchResponse(AdmissionBatchBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class DepartmentResponse(DepartmentBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class StudentResponse(StudentBase):
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class DormitoryResponse(DormitoryBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class StaffResponse(StaffBase):
     id: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class RegistrationProcessResponse(RegistrationProcessBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class RegistrationInfoResponse(RegistrationInfoBase):
     id: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class FieldMappingResponse(FieldMappingBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
-class TenantBase(BaseModel):
+class TenantBase(BaseSchema):
     name: str = Field(..., description="租户名称")
     description: Optional[str] = Field(None, description="租户描述")
     max_users: Optional[int] = Field(100, description="最大用户数")
@@ -271,14 +251,15 @@ class TenantBase(BaseModel):
 class TenantCreate(TenantBase):
     pass
 
-class TenantUpdate(TenantBase):
-    status: Optional[TenantStatus] = Field(None, description="租户状态")
+class TenantUpdate(BaseSchema):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    max_users: Optional[int] = None
+    expire_date: Optional[date] = None
+    status: Optional[TenantStatus] = None
 
 class TenantResponse(TenantBase):
     id: int
     schema_name: str
     status: TenantStatus
-    is_deleted: bool
-
-    class Config:
-        from_attributes = True 
+    is_deleted: bool 

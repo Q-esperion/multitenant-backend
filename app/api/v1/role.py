@@ -4,26 +4,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.db.session import get_db
 from app.deps import get_current_user
-from app.models.public import Role, User
+from app.models.public import Role, User, UserRole
 from app.schemas.role import RoleCreate, RoleUpdate, RoleResponse
-from app.schemas.common import Success
+from app.schemas.common import Success, SuccessExtra
 
 router = APIRouter()
 
-@router.get("/list", response_model=Success[dict])
+@router.get("/list")
 async def get_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    role_name: str = None
+    name: str = None
 ) -> Any:
     """
     获取角色列表
     """
-    query = select(Role)
-    if role_name:
-        query = query.where(Role.name.ilike(f"%{role_name}%"))
+    query = select(Role).where(Role.tenant_id == current_user.tenant_id)
+    if name:
+        query = query.where(Role.name.ilike(f"%{name}%"))
     
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -31,14 +31,9 @@ async def get_roles(
     result = await db.execute(query)
     roles = result.scalars().all()
     
-    return Success(data={
-        "items": roles,
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    })
+    return SuccessExtra(data=roles, total=total, page=page, page_size=page_size)
 
-@router.get("/get", response_model=Success[RoleResponse])
+@router.get("/get")
 async def get_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),
@@ -56,7 +51,7 @@ async def get_role(
         )
     return Success(data=role)
 
-@router.post("/create", response_model=Success[RoleResponse])
+@router.post("/create")
 async def create_role(
     role_in: RoleCreate,
     db: AsyncSession = Depends(get_db),
@@ -75,7 +70,7 @@ async def create_role(
     await db.refresh(role)
     return Success(data=role)
 
-@router.put("/update", response_model=Success[RoleResponse])
+@router.put("/update")
 async def update_role(
     role_id: int,
     role_in: RoleUpdate,
@@ -101,7 +96,7 @@ async def update_role(
     await db.refresh(role)
     return Success(data=role)
 
-@router.delete("/delete", response_model=Success[dict])
+@router.delete("/delete")
 async def delete_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),

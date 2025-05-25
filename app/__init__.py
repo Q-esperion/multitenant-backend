@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from fastapi.middleware.cors import CORSMiddleware
 
 # 获取项目根目录
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -33,16 +34,21 @@ from app.core.config import settings
 engine = create_async_engine(
     settings.SQLALCHEMY_DATABASE_URI,
     pool_pre_ping=True,
-    echo=settings.DEBUG
+    echo=settings.DEBUG,
+    connect_args={
+        "server_settings": {
+            "timezone": "Asia/Shanghai"
+        }
+    }
 )
 
 # 创建异步会话工厂
-async_session = sessionmaker(
+AsyncSessionLocal = sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autocommit=False,
-    autoflush=False,
+    autoflush=False
 )
 
 # 导入模型
@@ -57,10 +63,6 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
-    # 初始化数据
-    from app.db.init_data import init_data
-    await init_data()
-    
     yield
     
     # 关闭数据库连接
@@ -68,28 +70,34 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """
-    创建 FastAPI 应用
+    创建FastAPI应用
     """
     app = FastAPI(
         title=settings.PROJECT_NAME,
-        description="Multi-tenant Campus Freshman Registration System",
-        version=__version__,
-        lifespan=lifespan,
+        description=settings.PROJECT_DESCRIPTION,
+        version=settings.VERSION,
+        docs_url="/docs" if settings.DEBUG else None,
+        redoc_url="/redoc" if settings.DEBUG else None,
+        lifespan=lifespan
     )
+    
+    # 配置CORS
+    if settings.CORS_ORIGINS:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[str(origin) for origin in settings.CORS_ORIGINS],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    
+    # 添加日志中间件
+    from app.middleware.logging import LoggingMiddleware
+    app.add_middleware(LoggingMiddleware)
     
     # 注册路由
-    from app.api.v1 import base
-    app.include_router(base.router, prefix=settings.API_V1_STR)
-    
-    # 注册中间件
-    from fastapi.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    from app.api.v1.router import router as v1_router
+    app.include_router(v1_router, prefix="/api/v1")
     
     return app
 
@@ -99,7 +107,7 @@ app = create_app()
 # 导出常用模块
 __all__ = [
     "settings",
-    "async_session",
+    "AsyncSessionLocal",
     "engine",
     "Base",
     "app",

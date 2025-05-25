@@ -6,11 +6,11 @@ from app.deps import get_current_user
 from app.db.session import get_db
 from app.models.public import Menu, User
 from app.schemas.menu import MenuCreate, MenuUpdate, MenuResponse
-from app.schemas.common import Success
+from app.schemas.common import Success, SuccessExtra
 
 router = APIRouter()
 
-@router.get("/list", response_model=Success[List[MenuResponse]])
+@router.get("/list")
 async def get_menus(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -29,9 +29,9 @@ async def get_menus(
         .limit(limit)
     )
     menus = result.scalars().all()
-    return Success(data=menus)
+    return SuccessExtra(data=menus, total=len(menus), page=1, page_size=limit)
 
-@router.post("/create", response_model=Success[MenuResponse])
+@router.post("/create")
 async def create_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -48,7 +48,7 @@ async def create_menu(
     await db.refresh(menu)
     return Success(data=menu)
 
-@router.get("/get", response_model=Success[MenuResponse])
+@router.get("/get")
 async def get_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -72,7 +72,7 @@ async def get_menu(
         )
     return Success(data=menu)
 
-@router.put("/update", response_model=Success[MenuResponse])
+@router.put("/update")
 async def update_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -103,7 +103,7 @@ async def update_menu(
     await db.refresh(menu)
     return Success(data=menu)
 
-@router.delete("/delete", response_model=Success[MenuResponse])
+@router.delete("/delete")
 async def delete_menu(
     *,
     db: AsyncSession = Depends(get_db),

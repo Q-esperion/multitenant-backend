@@ -4,9 +4,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 from app.core.security import verify_token
 from app.models.public import AccessLog
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import async_session
+from app.db.session import AsyncSessionLocal
 from app.core.log import get_logger
+from datetime import datetime
 import time
 import json
 
@@ -24,15 +24,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable
     ) -> Response:
         # 记录请求开始时间
-        start_time = time.time()
+        start_time = datetime.now()
         
         # 获取请求信息
         path = request.url.path
         method = request.method
-        client_host = request.client.host if request.client else None
+        client_ip = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent")
         
-        logger.debug(f"收到请求: {method} {path} from {client_host}")
+        logger.debug(f"收到请求: {method} {path} from {client_ip}")
         
         # 获取用户信息
         user_id = None
@@ -45,7 +45,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     username = payload.get("sub")
                     if username:
                         logger.debug(f"验证用户token: {username}")
-                        async with async_session() as session:
+                        async with AsyncSessionLocal() as session:
                             from app.models.public import User
                             from sqlalchemy import select
                             result = await session.execute(
@@ -67,7 +67,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             raise
         
         # 计算响应时间
-        process_time = int((time.time() - start_time) * 1000)
+        process_time = (datetime.now() - start_time).total_seconds()
         
         try:
             # 创建访问日志
@@ -76,16 +76,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 path=path,
                 method=method,
                 status_code=response.status_code,
-                response_time=process_time,
-                ip_address=client_host,
+                process_time=process_time,
+                ip_address=client_ip,
                 user_agent=user_agent
             )
             
             # 异步保存日志
-            async with async_session() as session:
+            async with AsyncSessionLocal() as session:
                 session.add(access_log)
                 await session.commit()
-                logger.debug(f"访问日志已保存: {method} {path} - {response.status_code} ({process_time}ms)")
+                logger.debug(f"访问日志已保存: {method} {path} - {response.status_code} ({process_time}s)")
         except Exception as e:
             logger.error(f"保存访问日志失败: {str(e)}")
         

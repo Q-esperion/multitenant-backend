@@ -11,23 +11,15 @@ from app.models.public import User, Menu, Api, Role, RoleMenu, RoleApi, UserRole
 from app.schemas.token import Token, LoginRequest, JWTPayload, JWTOut
 from app.schemas.user import UserCreate, UserResponse, UserInfoResponse, UpdatePasswordRequest
 from app.schemas.menu import MenuResponse
-from app.schemas.common import Success
-from app.api.v1 import user, role, menu, api, tenant, log
+from app.schemas.common import Success, SuccessExtra, BaseSchema
 from app.deps import get_current_user, get_current_active_superuser
+from app.core.log import get_logger
 import logging
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# 注册所有子路由
-router.include_router(user.router, prefix="/user", tags=["user"])
-router.include_router(role.router, prefix="/role", tags=["role"])
-router.include_router(menu.router, prefix="/menu", tags=["menu"])
-router.include_router(api.router, prefix="/api", tags=["api"])
-router.include_router(tenant.router, prefix="/tenant", tags=["tenant"])
-router.include_router(log.router, prefix="/log", tags=["log"])
-
-@router.post("/access_token", response_model=Success[JWTOut])
+@router.post("/access_token")
 async def login_access_token(
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db)
@@ -90,7 +82,7 @@ async def login_access_token(
     
     return Success(data=data.model_dump())
 
-@router.get("/userinfo", response_model=Success[UserInfoResponse])
+@router.get("/userinfo")
 async def get_user_info(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -105,16 +97,29 @@ async def get_user_info(
         .where(UserRole.user_id == current_user.id)
     )
     roles = result.scalars().all()
-    role_names = [role.name for role in roles]
+    role_list = [{"id": role.id, "name": role.name} for role in roles]
     
-    user_info = UserInfoResponse(
-        **current_user.__dict__,
-        roles=role_names
-    )
+    # 先创建基础用户数据
+    user_dict = {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "is_active": current_user.is_active,
+        "tenant_id": current_user.tenant_id,
+        "is_tenant_admin": current_user.is_tenant_admin,
+        "is_superuser": current_user.is_superuser,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
+        "roles": role_list
+    }
     
-    return Success(data=user_info)
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump())
 
-@router.get("/usermenu", response_model=Success[List[MenuResponse]])
+@router.get("/usermenu")
 async def get_user_menu(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -124,47 +129,24 @@ async def get_user_menu(
     if current_user.is_superuser:
         result = await db.execute(
             select(Menu)
+            .where(Menu.is_deleted == False)
             .order_by(Menu.order)
         )
         menus = result.scalars().all()
     else:
-        # 获取用户角色
+        # 获取用户角色关联的菜单
         result = await db.execute(
-            select(Role)
-            .join(UserRole, Role.id == UserRole.role_id)
-            .where(UserRole.user_id == current_user.id)
+            select(Menu)
+            .join(RoleMenu)
+            .join(Role)
+            .join(Role.users)
+            .where(User.id == current_user.id)
+            .where(Menu.is_deleted == False)
+            .order_by(Menu.order)
         )
-        roles = result.scalars().all()
-        
-        # 检查是否有系统管理员角色
-        is_admin = any(role.code == "admin" for role in roles)
-        if is_admin:
-            # 系统管理员返回所有菜单
-            result = await db.execute(
-                select(Menu)
-                .order_by(Menu.order)
-            )
-            menus = result.scalars().all()
-        else:
-            # 获取角色对应的菜单
-            menu_ids = set()
-            for role in roles:
-                result = await db.execute(
-                    select(RoleMenu.menu_id)
-                    .where(RoleMenu.role_id == role.id)
-                )
-                role_menu_ids = result.scalars().all()
-                menu_ids.update(role_menu_ids)
-            
-            # 获取所有菜单
-            result = await db.execute(
-                select(Menu)
-                .where(Menu.id.in_(menu_ids))
-                .order_by(Menu.order)
-            )
-            menus = result.scalars().all()
+        menus = result.scalars().all()
     
-    # 构建菜单树
+    # 构建树形结构
     menu_dict = {}
     root_menus = []
     
@@ -199,7 +181,7 @@ async def get_user_menu(
     
     return Success(data=root_menus)
 
-@router.get("/userapi", response_model=Success[List[str]])
+@router.get("/userapi")
 async def get_user_api(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -229,7 +211,7 @@ async def get_user_api(
     api_paths = [api.path for api in apis]
     return Success(data=api_paths)
 
-@router.post("/update_password", response_model=Success[dict])
+@router.post("/update_password")
 async def update_password(
     password_data: UpdatePasswordRequest,
     db: AsyncSession = Depends(get_db),
@@ -259,105 +241,4 @@ async def update_password(
     current_user.password = get_password_hash(new_password)
     await db.commit()
     
-    return Success(data={"msg": "密码修改成功"})
-
-@router.post("/register", response_model=Success[UserResponse])
-async def register_user(
-    *,
-    db: AsyncSession = Depends(get_db),
-    user_in: UserCreate,
-) -> Any:
-    """
-    Register new user.
-    """
-    result = await db.execute(
-        select(User).where(User.username == user_in.username)
-    )
-    user = result.scalar_one_or_none()
-    if user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The user with this username already exists in the system.",
-        )
-    
-    user = User(
-        username=user_in.username,
-        email=user_in.email,
-        password=user_in.password,
-        is_active=True,
-        is_superuser=False,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return Success(data=user)
-
-@router.post("/user/create", response_model=Success[UserResponse])
-async def create_user(
-    user_in: UserCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_superuser)
-) -> Any:
-    """
-    创建用户
-    """
-    try:
-        logger.info(f"开始创建用户，请求数据: {user_in.dict()}")
-        
-        # 检查用户名是否已存在
-        result = await db.execute(
-            select(User).where(User.username == user_in.username)
-        )
-        if result.scalar_one_or_none():
-            logger.error(f"用户名已存在: {user_in.username}")
-            raise HTTPException(
-                status_code=400,
-                detail="用户名已存在"
-            )
-        
-        # 检查租户是否存在
-        if user_in.tenant_id:
-            result = await db.execute(
-                select(User).where(User.id == user_in.tenant_id)
-            )
-            if not result.scalar_one_or_none():
-                logger.error(f"租户不存在: {user_in.tenant_id}")
-                raise HTTPException(
-                    status_code=400,
-                    detail="租户不存在"
-                )
-        
-        # 创建用户
-        user = User(
-            username=user_in.username,
-            password=encrypt_password(user_in.password),
-            email=user_in.email,
-            phone=user_in.phone,
-            is_active=user_in.is_active,
-            user_type=user_in.user_type,
-            tenant_id=user_in.tenant_id,
-            is_tenant_admin=user_in.is_tenant_admin
-        )
-        
-        db.add(user)
-        await db.flush()
-        
-        # 如果指定了角色，为用户分配角色
-        if user_in.role_ids:
-            for role_id in user_in.role_ids:
-                user_role = UserRole(user_id=user.id, role_id=role_id)
-                db.add(user_role)
-        
-        await db.commit()
-        await db.refresh(user)
-        
-        logger.info(f"用户创建成功: {user.username}")
-        return Success(data=user)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"创建用户时发生错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"创建用户失败: {str(e)}"
-        ) 
+    return Success(data={"msg": "密码修改成功"}) 

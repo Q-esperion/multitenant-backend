@@ -6,21 +6,42 @@ from typing import AsyncGenerator
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from app.core.log import get_logger
-
-from app import async_session
 from app.core.config import settings
 
 # 获取logger
 logger = get_logger(__name__)
+
+engine = create_async_engine(
+    settings.SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+    echo=settings.DEBUG,
+    future=True,
+    connect_args={
+        "server_settings": {
+            "timezone": "Asia/Shanghai"
+        }
+    }
+)
+
+AsyncSessionLocal = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     获取数据库会话
     """
     logger.debug("创建数据库会话")
-    async with async_session() as session:
+    async with AsyncSessionLocal() as session:
         try:
+            # 设置会话时区
+            await session.execute(text("SET timezone = 'Asia/Shanghai';"))
             yield session
         finally:
             logger.debug("关闭数据库会话")
@@ -37,7 +58,12 @@ async def get_tenant_db(tenant_id: int) -> AsyncGenerator[AsyncSession, None]:
         settings.SQLALCHEMY_DATABASE_URI,
         echo=settings.DEBUG,
         future=True,
-        connect_args={"options": f"-csearch_path={schema_name}"}
+        connect_args={
+            "server_settings": {
+                "timezone": "Asia/Shanghai",
+                "search_path": schema_name
+            }
+        }
     )
     
     AsyncTenantSessionLocal = sessionmaker(
@@ -50,6 +76,8 @@ async def get_tenant_db(tenant_id: int) -> AsyncGenerator[AsyncSession, None]:
     
     async with AsyncTenantSessionLocal() as session:
         try:
+            # 设置会话时区
+            await session.execute(text("SET timezone = 'Asia/Shanghai';"))
             logger.debug(f"租户数据库会话创建成功: schema={schema_name}")
             yield session
         finally:

@@ -2,7 +2,7 @@
 
 Revision ID: init_tables
 Revises: 
-Create Date: 2024-05-24 20:30:00.000000
+Create Date: 2024-03-24 12:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -36,13 +36,13 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(100), nullable=False),
         sa.Column('schema_name', sa.String(100), nullable=False),
-        sa.Column('status', sa.String(20), nullable=True),
+        sa.Column('status', sa.String(20), default='active'),
         sa.Column('description', sa.String(500), nullable=True),
-        sa.Column('max_users', sa.Integer(), nullable=True),
+        sa.Column('max_users', sa.Integer(), default=100),
         sa.Column('expire_date', sa.Date(), nullable=True),
-        sa.Column('is_deleted', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.Column('is_deleted', sa.Boolean(), default=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('schema_name')
     )
@@ -56,18 +56,18 @@ def upgrade() -> None:
         sa.Column('email', sa.String(100), nullable=True),
         sa.Column('phone', sa.String(20), nullable=True),
         sa.Column('password', sa.String(100), nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=True),
-        sa.Column('user_type', sa.String(20), nullable=True),
-        sa.Column('is_superuser', sa.Boolean(), nullable=True),
-        sa.Column('last_login', sa.DateTime(), nullable=True),
+        sa.Column('is_active', sa.Boolean(), default=True),
+        sa.Column('is_superuser', sa.Boolean(), default=False),
+        sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
         sa.Column('dept_id', sa.Integer(), nullable=True),
         sa.Column('tenant_id', sa.Integer(), nullable=True),
-        sa.Column('is_tenant_admin', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.Column('is_tenant_admin', sa.Boolean(), default=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('username')
+        sa.UniqueConstraint('username'),
+        sa.UniqueConstraint('email')
     )
 
     # 创建roles表
@@ -77,8 +77,8 @@ def upgrade() -> None:
         sa.Column('name', sa.String(50), nullable=False),
         sa.Column('code', sa.String(50), nullable=False),
         sa.Column('description', sa.String(200), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('code')
     )
@@ -92,9 +92,9 @@ def upgrade() -> None:
         sa.Column('summary', sa.String(200), nullable=True),
         sa.Column('tags', sa.String(100), nullable=True),
         sa.Column('description', sa.String(500), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.Column('is_deleted', sa.Boolean(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('is_deleted', sa.Boolean(), default=False),
         sa.PrimaryKeyConstraint('id')
     )
 
@@ -107,15 +107,15 @@ def upgrade() -> None:
         sa.Column('path', sa.String(100), nullable=False),
         sa.Column('component', sa.String(100), nullable=False),
         sa.Column('icon', sa.String(50), nullable=True),
-        sa.Column('order', sa.Integer(), nullable=True),
+        sa.Column('order', sa.Integer(), default=0),
         sa.Column('parent_id', sa.Integer(), nullable=True),
-        sa.Column('is_hidden', sa.Boolean(), nullable=True),
-        sa.Column('keepalive', sa.Boolean(), nullable=True),
+        sa.Column('is_hidden', sa.Boolean(), default=False),
+        sa.Column('keepalive', sa.Boolean(), default=False),
         sa.Column('redirect', sa.String(200), nullable=True),
-        sa.Column('is_enabled', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.Column('is_deleted', sa.Boolean(), nullable=True),
+        sa.Column('is_enabled', sa.Boolean(), default=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('is_deleted', sa.Boolean(), default=False),
         sa.ForeignKeyConstraint(['parent_id'], ['menus.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
@@ -127,10 +127,8 @@ def upgrade() -> None:
         sa.Column('tenant_id', sa.Integer(), nullable=False),
         sa.Column('menu_id', sa.Integer(), nullable=True),
         sa.Column('api_id', sa.Integer(), nullable=True),
-        sa.Column('is_enabled', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.Column('is_deleted', sa.Boolean(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['api_id'], ['apis.id'], ),
         sa.ForeignKeyConstraint(['menu_id'], ['menus.id'], ),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
@@ -148,7 +146,7 @@ def upgrade() -> None:
         sa.Column('details', sa.Text(), nullable=True),
         sa.Column('ip_address', sa.String(50), nullable=True),
         sa.Column('user_agent', sa.String(200), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
@@ -164,7 +162,7 @@ def upgrade() -> None:
         sa.Column('response_time', sa.Integer(), nullable=True),
         sa.Column('ip_address', sa.String(50), nullable=True),
         sa.Column('user_agent', sa.String(200), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )

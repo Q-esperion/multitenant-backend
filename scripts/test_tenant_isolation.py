@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.session import async_session
+from app.db.session import AsyncSessionLocal
 from app.models.public import User, Tenant, UserRole, Role
 from app.schemas.tenant import TenantCreate
 from app.core.security import encrypt_password
@@ -71,7 +71,7 @@ class TestClient:
         """创建租户"""
         try:
             response = await self.client.post(
-                "/api/v1/base/tenant/create",
+                "/api/v1/tenant/create",
                 json=tenant_data,
                 headers=self.headers
             )
@@ -86,11 +86,21 @@ class TestClient:
     async def create_user(self, user_data: Dict) -> Dict:
         """创建用户"""
         try:
+            # 确保密码已加密
+            if not user_data.get("password"):
+                raise ValueError("密码不能为空")
+            
+            logger.info(f"创建用户请求数据: {user_data}")
             response = await self.client.post(
-                "/api/v1/base/user/create",
+                "/api/v1/user/create",
                 json=user_data,
                 headers=self.headers
             )
+            
+            if response.status_code != 200:
+                logger.error(f"创建用户失败，状态码: {response.status_code}")
+                logger.error(f"错误响应: {response.text}")
+            
             response.raise_for_status()
             data = response.json()
             logger.info(f"创建用户成功: {user_data['username']}")
@@ -116,16 +126,16 @@ class TestClient:
             logger.info(f"当前用户信息: {current_user}")
             
             # 权限校验
-            if current_user.get("is_superuser") or current_user.get("user_type") == "system_admin":
-                # 超级管理员和系统管理员可以操作所有租户的数据
-                logger.info("用户是超级管理员或系统管理员，允许操作")
+            if current_user.get("is_superuser"):
+                # 超级管理员可以操作所有租户的数据
+                logger.info("用户是超级管理员，允许操作")
                 pass
-            elif (current_user.get("is_tenant_admin") or "租户管理员" in current_user.get("roles", [])) and current_user.get("tenant_id") == tenant_id:
-                # 租户管理员（通过标志或角色）只能操作自己租户的数据
+            elif current_user.get("is_tenant_admin") and current_user.get("tenant_id") == tenant_id:
+                # 租户管理员只能操作自己租户的数据
                 logger.info("用户是租户管理员且操作自己的租户，允许操作")
                 pass
             else:
-                logger.error(f"权限校验失败: user_type={current_user.get('user_type')}, tenant_id={current_user.get('tenant_id')}, target_tenant_id={tenant_id}, is_tenant_admin={current_user.get('is_tenant_admin')}, roles={current_user.get('roles')}")
+                logger.error(f"权限校验失败: tenant_id={current_user.get('tenant_id')}, target_tenant_id={tenant_id}, is_tenant_admin={current_user.get('is_tenant_admin')}")
                 raise Exception("没有权限操作该租户的数据")
             
             # 将 birth_date 字符串转换为 date 对象
@@ -133,7 +143,7 @@ class TestClient:
                 student_data['birth_date'] = datetime.strptime(student_data['birth_date'], '%Y-%m-%d').date()
             
             # 切换到租户schema
-            async with async_session() as session:
+            async with AsyncSessionLocal() as session:
                 await session.execute(text(f"SET search_path TO tenant_{tenant_id}"))
                 await session.execute(
                     text("""
@@ -151,7 +161,7 @@ class TestClient:
 
 async def init_test_data():
     """初始化测试数据"""
-    async with async_session() as session:
+    async with AsyncSessionLocal() as session:
         # 检查是否已存在系统管理员角色
         result = await session.execute(
             text("SELECT id FROM roles WHERE code = 'admin'")
@@ -184,8 +194,7 @@ async def init_test_data():
                 password=encrypt_password("123456"),
                 email="admin@example.com",
                 is_active=True,
-                is_superuser=True,
-                user_type="super_admin"
+                is_superuser=True
             )
             session.add(admin_user)
             await session.commit()
@@ -235,42 +244,39 @@ async def main():
     # 创建用户
     user_a = await client.create_user({
         "username": "user_a",
-        "password": encrypt_password("password123"),
+        "password": encrypt_password("Password123!"),
         "email": "user_a@example.com",
         "phone": "13800138000",
         "tenant_id": tenant_aa["data"]["id"],
         "is_active": True,
-        "user_type": "tenant_user",
         "is_tenant_admin": True,
         "role_ids": []
     })
     
     user_b = await client.create_user({
         "username": "user_b",
-        "password": encrypt_password("password123"),
+        "password": encrypt_password("Password123!"),
         "email": "user_b@example.com",
         "phone": "13800138001",
         "tenant_id": tenant_bb["data"]["id"],
         "is_active": True,
-        "user_type": "tenant_user",
         "is_tenant_admin": True,
         "role_ids": []
     })
     
     user_c = await client.create_user({
         "username": "user_c",
-        "password": encrypt_password("password123"),
+        "password": encrypt_password("Password123!"),
         "email": "user_c@example.com",
         "phone": "13800138002",
         "tenant_id": tenant_aa["data"]["id"],
         "is_active": True,
-        "user_type": "tenant_user",
         "is_tenant_admin": False,
         "role_ids": []
     })
     
     # 设置租户管理员
-    async with async_session() as session:
+    async with AsyncSessionLocal() as session:
         # 为user_a设置AA租户管理员角色
         await session.execute(
             text("""
@@ -294,7 +300,7 @@ async def main():
     
     # 使用不同用户插入数据
     # 用户A插入AA租户数据
-    await client.login("user_a", "password123")
+    await client.login("user_a", "Password123!")
     await client.insert_student(tenant_aa["data"]["id"], {
         "id_card": "110101199001011234",
         "student_id": "AA001",
@@ -305,7 +311,7 @@ async def main():
     })
     
     # 用户B插入BB租户数据
-    await client.login("user_b", "password123")
+    await client.login("user_b", "Password123!")
     await client.insert_student(tenant_bb["data"]["id"], {
         "id_card": "110101199001011235",
         "student_id": "BB001",
@@ -316,7 +322,7 @@ async def main():
     })
     
     # 用户C尝试插入AA租户数据（应该失败）
-    await client.login("user_c", "password123")
+    await client.login("user_c", "Password123!")
     try:
         await client.insert_student(tenant_aa["data"]["id"], {
             "id_card": "110101199001011236",
@@ -330,7 +336,7 @@ async def main():
         logger.info(f"用户C插入数据失败（符合预期）: {str(e)}")
     
     # 验证数据隔离
-    async with async_session() as session:
+    async with AsyncSessionLocal() as session:
         # 检查AA租户数据
         await session.execute(text(f"SET search_path TO tenant_{tenant_aa['data']['id']}"))
         result = await session.execute(text("SELECT * FROM students"))

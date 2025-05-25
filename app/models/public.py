@@ -1,14 +1,14 @@
 from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Date, DateTime, Text, CheckConstraint
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 import enum
 from .base import BaseModel, Base
 from datetime import datetime
+import pytz
 
-class UserType(str, enum.Enum):
-    SUPER_ADMIN = "super_admin"
-    TENANT_ADMIN = "tenant_admin"
-    NORMAL_USER = "normal_user"
+def get_current_time():
+    """获取当前时区的时间"""
+    return datetime.now(pytz.timezone('Asia/Shanghai'))
 
 class TenantStatus(str, enum.Enum):
     ACTIVE = "active"
@@ -45,18 +45,20 @@ class Tenant(BaseModel):
 class User(BaseModel):
     __tablename__ = "users"
     
-    username = Column(String(50), unique=True, nullable=False)
-    alias = Column(String(50))
-    email = Column(String(100))
-    phone = Column(String(20))
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    alias = Column(String(50), nullable=True)
+    email = Column(String(100), unique=True, index=True, nullable=True)
+    phone = Column(String(20), nullable=True)
     password = Column(String(100), nullable=False)
     is_active = Column(Boolean, default=True)
-    user_type = Column(String(20), default=UserType.NORMAL_USER.value)
     is_superuser = Column(Boolean, default=False)
-    last_login = Column(DateTime)
-    dept_id = Column(Integer)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    department = Column(String(100), nullable=True)  # 部门名称
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
     is_tenant_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
     
     # 关系
     tenant = relationship("Tenant", back_populates="users")
@@ -85,8 +87,8 @@ class Api(BaseModel):
     summary = Column(String(200))
     tags = Column(String(100))
     description = Column(String(500))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_deleted = Column(Boolean, default=False)
     
     # 关系
@@ -108,8 +110,8 @@ class Menu(BaseModel):
     keepalive = Column(Boolean, default=False, comment="是否缓存")
     redirect = Column(String(200), nullable=True, comment="重定向")
     is_enabled = Column(Boolean, default=True, comment="是否启用")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
     is_deleted = Column(Boolean, default=False, comment="是否删除")
 
     # 关系
@@ -125,8 +127,8 @@ class TenantPermission(BaseModel):
     menu_id = Column(Integer, ForeignKey("menus.id"), nullable=True)
     api_id = Column(Integer, ForeignKey("apis.id"), nullable=True)
     is_enabled = Column(Boolean, default=True, comment="是否启用")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_deleted = Column(Boolean, default=False)
 
     # 关系
@@ -165,9 +167,10 @@ class AccessLog(BaseModel):
     method = Column(String(10), nullable=False)
     status_code = Column(Integer, nullable=False)
     response_time = Column(Integer)  # 响应时间（毫秒）
+    process_time = Column(Integer)  # 处理时间（毫秒）
     ip_address = Column(String(50))
     user_agent = Column(String(200))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
     
     user = relationship("User", back_populates="access_logs")
 
