@@ -1,14 +1,15 @@
-# 多租户校园新生报到系统
+# multitenant-backend
 
-这是一个基于FastAPI和PostgreSQL的多租户校园新生报到系统后端。
+基于[vue-fastapi-admin](https://github.com/mizhexiaoxiao/vue-fastapi-admin)项目，使用FastAPI、SQLAlchemy重构后端实现多租户隔离。
+
+开发中...
 
 ## 功能特点
 
-- 多租户数据隔离（使用PostgreSQL Schema）
+- 使用PostgreSQL Schema实现多租户数据隔离
 - RBAC权限控制
 - 租户级别的菜单和API权限管理
 - 审计日志功能
-- 部门管理
 - 用户认证和授权
 - 配置化管理
 
@@ -17,17 +18,14 @@
 - FastAPI
 - SQLAlchemy
 - PostgreSQL
-- JWT认证
-- Pydantic
 - Alembic
-- uv (Python包管理器)
 
 ## 安装
 
 1. 克隆项目
 ```bash
-git clone https://github.com/yourusername/multi-tenant-backend.git
-cd multi-tenant-backend
+git clone https://github.com/Q-esperion/multitenant-backend.git
+cd multitenant-backend
 ```
 
 2. 安装 uv
@@ -73,21 +71,6 @@ uvicorn app.main:app --reload
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-详细的API文档请参考 `docs/` 目录下的文档：
-- `docs/base.md`: 基础接口文档
-- `docs/user.md`: 用户管理接口文档
-- `docs/tenant.md`: 租户管理接口文档
-
-## 密码规则
-
-系统对用户密码有以下要求：
-1. 长度不能小于8位
-2. 必须包含大写字母
-3. 必须包含小写字母
-4. 必须包含数字
-5. 必须包含特殊字符
-
-示例密码：`Password123!`
 
 ## 测试
 
@@ -135,37 +118,9 @@ multi-tenant-backend/
 - tenant_permissions: 租户权限
 
 ### 租户Schema (tenant_{id})
-- admission_batches: 入学批次
-- departments: 部门信息
-- students: 学生信息
-- dormitories: 宿舍信息
-- staff: 工作人员
-- registration_processes: 报到流程
-- registration_info: 报到信息
-- field_mappings: 字段映射
+- 租户数据表
 
-## 开发工具
 
-### 代码格式化
-项目使用 Ruff 进行代码格式化和检查：
-```bash
-# 格式化代码
-ruff format .
-
-# 检查代码
-ruff check .
-```
-
-### 测试
-项目使用 pytest 进行测试：
-```bash
-# 运行测试
-pytest
-
-# 运行测试并生成覆盖率报告
-pytest --cov=app
-```
-
-## 许可证
+## License
 
 MIT 
