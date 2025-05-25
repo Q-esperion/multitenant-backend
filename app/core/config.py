@@ -23,8 +23,8 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 class Settings(BaseSettings):
     # 项目基本信息
-    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "校园新生报到系统")
-    PROJECT_DESCRIPTION: str = os.getenv("PROJECT_DESCRIPTION", "提供多租户校园新生报到相关信息管理、报到流程环节管理功能")
+    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "Project Name")
+    PROJECT_DESCRIPTION: str = os.getenv("PROJECT_DESCRIPTION", "Project Description")
     VERSION: str = os.getenv("VERSION", "0.1.0")
     API_V1_STR: str = os.getenv("API_V1_STR", "/api/v1")
     
