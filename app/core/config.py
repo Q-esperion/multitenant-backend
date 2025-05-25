@@ -3,9 +3,23 @@ from pydantic_settings import BaseSettings
 from pydantic import AnyHttpUrl, validator
 from dotenv import load_dotenv
 import os
+import logging
+from pathlib import Path
 
 # 加载.env文件
 load_dotenv()
+
+# 创建日志目录
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+
+# 日志文件路径
+LOG_FILE = LOG_DIR / "app.log"
+
+# 定义不同级别的日志格式
+DEBUG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(funcName)s:%(lineno)d] - %(message)s"
+DEFAULT_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 class Settings(BaseSettings):
     # 项目基本信息
@@ -50,4 +64,12 @@ class Settings(BaseSettings):
         case_sensitive = True
         env_file = ".env"
 
-settings = Settings() 
+settings = Settings()
+
+def setup_logging():
+    """配置日志系统"""
+    # 设置根logger的日志级别
+    logging.basicConfig(level=settings.LOG_LEVEL)
+    # 设置uvicorn的日志级别
+    logging.getLogger("uvicorn").setLevel(settings.LOG_LEVEL)
+    logging.getLogger("uvicorn.access").setLevel(settings.LOG_LEVEL) 

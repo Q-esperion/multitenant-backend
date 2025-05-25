@@ -6,8 +6,12 @@ from app.core.security import verify_token
 from app.models.public import AccessLog
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import async_session
+from app.core.log import get_logger
 import time
 import json
+
+# 获取logger
+logger = get_logger(__name__)
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     def __init__(
@@ -28,6 +32,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         client_host = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent")
         
+        logger.debug(f"收到请求: {method} {path} from {client_host}")
+        
         # 获取用户信息
         user_id = None
         auth_header = request.headers.get("authorization")
@@ -38,6 +44,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 if payload:
                     username = payload.get("sub")
                     if username:
+                        logger.debug(f"验证用户token: {username}")
                         async with async_session() as session:
                             from app.models.public import User
                             from sqlalchemy import select
@@ -47,11 +54,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                             user = result.scalar_one_or_none()
                             if user:
                                 user_id = user.id
-            except Exception:
-                pass
+                                logger.debug(f"用户验证成功: {username}")
+            except Exception as e:
+                logger.warning(f"用户token验证失败: {str(e)}")
 
         # 执行请求
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+            logger.debug(f"请求处理成功: {method} {path}")
+        except Exception as e:
+            logger.error(f"请求处理失败: {method} {path}, 错误: {str(e)}")
+            raise
         
         # 计算响应时间
         process_time = int((time.time() - start_time) * 1000)
@@ -72,8 +85,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             async with async_session() as session:
                 session.add(access_log)
                 await session.commit()
+                logger.debug(f"访问日志已保存: {method} {path} - {response.status_code} ({process_time}ms)")
         except Exception as e:
-            # 如果记录日志失败，打印错误信息但不影响请求处理
-            print(f"Failed to log access: {str(e)}")
+            logger.error(f"保存访问日志失败: {str(e)}")
         
         return response 
