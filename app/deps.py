@@ -1,106 +1,50 @@
 from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_
+from pydantic import ValidationError
 from app.core.config import settings
 from app.db.session import get_db, get_tenant_db
-from app.models.public import User
+from app.models.public import User, Api, Role, RoleApi, TenantPermission, Menu, RoleMenu
 from app.core.log import get_logger
+from app.schemas.token import JWTPayload
 
 # 获取logger
 logger = get_logger(__name__)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/access_token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/base/access_token")
 
 async def get_current_user(
-    token: str = Header(None, description="token验证"),
-    authorization: str = Header(None, description="Authorization验证"),
-    db: AsyncSession = Depends(get_db)
-) -> Optional[User]:
-    """
-    获取当前用户
-    支持从token或Authorization头部获取token
-    返回:
-        User: 当前用户对象
-    """
+    db: AsyncSession = Depends(get_db),
+    token: str = Depends(oauth2_scheme)
+) -> User:
     try:
-        # 获取token值
-        token_value = None
-        if token:
-            token_value = token
-            logger.debug("从token头部获取token")
-        elif authorization:
-            if authorization.startswith("Bearer "):
-                token_value = authorization.split(" ")[1]
-                logger.debug("从Authorization头部获取Bearer token")
-            else:
-                token_value = authorization
-                logger.debug("从Authorization头部获取token")
-                
-        if not token_value:
-            logger.warning("未提供认证信息")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="未提供认证信息"
-            )
-            
-        if token_value == "dev":
-            logger.debug("使用开发模式token")
-            result = await db.execute(select(User))
-            user = result.scalar_one_or_none()
-            return user
-            
-        try:
-            logger.debug("开始解码token")
-            payload = jwt.decode(
-                token_value, 
-                settings.SECRET_KEY, 
-                algorithms=[settings.ALGORITHM]
-            )
-        except JWTError as e:
-            if isinstance(e, jwt.ExpiredSignatureError):
-                logger.warning("token已过期")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="登录已过期"
-                )
-            logger.error(f"token解码失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的Token"
-            )
-            
-        user_id = payload.get("user_id")
-        if not user_id:
-            logger.warning("token中未找到user_id")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的Token"
-            )
-            
-        logger.debug(f"查询用户ID: {user_id}")
-        result = await db.execute(
-            select(User).where(User.id == user_id)
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
-        user = result.scalar_one_or_none()
-        
-        if not user:
-            logger.warning(f"用户不存在: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户不存在"
-            )
-            
-        logger.info(f"用户认证成功: {user.username}")
-        return user
-    except Exception as e:
-        logger.error(f"用户认证过程发生错误: {str(e)}")
+        token_data = JWTPayload(**payload)
+    except (jwt.JWTError, ValidationError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="无法验证凭据",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+    result = await db.execute(select(User).where(User.id == token_data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户未激活"
+        )
+    return user
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
@@ -153,3 +97,54 @@ async def get_tenant_session(
     logger.debug(f"获取租户数据库会话: tenant_id={tenant_id}")
     async for session in get_tenant_db(tenant_id):
         yield session 
+
+async def check_permission(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> None:
+    """
+    权限校验依赖函数
+    1. 检查用户是否登录（通过get_current_user依赖）
+    2. 如果是超级管理员，直接放行
+    3. 检查租户权限
+    4. 检查用户角色权限
+    """
+    # 如果是超级管理员，直接放行
+    if current_user.is_superuser:
+        return
+
+    # 获取当前请求的路径和方法
+    path = request.url.path
+    method = request.method
+
+    # 检查租户权限
+    tenant_permission_query = select(TenantPermission).join(Api).where(
+        and_(
+            TenantPermission.tenant_id == current_user.tenant_id,
+            Api.path == path,
+            Api.method == method,
+            TenantPermission.is_enabled == True,
+            TenantPermission.is_deleted == False
+        )
+    )
+    tenant_permission = await db.scalar(tenant_permission_query)
+    if not tenant_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="租户没有访问权限"
+        )
+
+    # 检查用户角色权限
+    role_api_query = select(RoleApi).join(Role).join(User).where(
+        and_(
+            User.id == current_user.id,
+            RoleApi.api_id == tenant_permission.api_id
+        )
+    )
+    role_api = await db.scalar(role_api_query)
+    if not role_api:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户角色没有访问权限"
+        ) 
