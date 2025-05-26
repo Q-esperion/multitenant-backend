@@ -129,6 +129,7 @@ def upgrade() -> None:
         sa.Column('api_id', sa.Integer(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('is_enabled', sa.Boolean(), default=True),
         sa.ForeignKeyConstraint(['api_id'], ['apis.id'], ),
         sa.ForeignKeyConstraint(['menu_id'], ['menus.id'], ),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
