@@ -14,7 +14,7 @@ from app.core.log import get_logger
 router = APIRouter()
 logger = get_logger(__name__)
 
-@router.post("/create")
+@router.post("/create", summary="创建用户")
 async def create_user(
     request: Request,
     user_in: UserCreate,
@@ -138,7 +138,7 @@ async def create_user(
             detail=f"创建用户失败: {str(e)}"
         )
 
-@router.get("/list")
+@router.get("/list", summary="获取用户列表")
 async def get_users(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -211,7 +211,7 @@ async def get_users(
     
     return SuccessExtra(data=user_list, total=total, page=page, page_size=page_size)
 
-@router.get("/get")
+@router.get("/get", summary="获取用户详情")
 async def get_user(
     request: Request,
     id: int,
@@ -271,7 +271,7 @@ async def get_user(
     
     return Success(data=user_data.model_dump())
 
-@router.put("/update")
+@router.put("/update", summary="更新用户")
 async def update_user(
     request: Request,
     id: int,
@@ -362,7 +362,7 @@ async def update_user(
     
     return Success(data=user_data.model_dump())
 
-@router.delete("/delete")
+@router.delete("/delete", summary="删除用户")
 async def delete_user(
     request: Request,
     id: int,
@@ -395,7 +395,7 @@ async def delete_user(
     
     return Success(data={"message": "User deleted successfully"})
 
-@router.post("/reset_password")
+@router.post("/reset_password", summary="重置用户密码")
 async def reset_password(
     request: Request,
     id: int,

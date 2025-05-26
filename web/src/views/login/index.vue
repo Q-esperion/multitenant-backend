@@ -90,8 +90,9 @@ async function handleLogin() {
   try {
     loading.value = true
 
-    // 获取密钥
-    const keyStr = import.meta.env.VITE_AES_SECRET_KEY.slice(0, 32)
+    // 获取密钥，如果环境变量未设置，使用默认值
+    const defaultKey = 'default-aes-secret-key-32-chars-long'
+    const keyStr = (import.meta.env.VITE_AES_SECRET_KEY || defaultKey).slice(0, 32)
     const key = CryptoJS.enc.Utf8.parse(keyStr)
     // 生成16字节随机IV
     const ivArray = window.crypto.getRandomValues(new Uint8Array(16))

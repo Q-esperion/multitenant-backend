@@ -10,7 +10,7 @@ from app.schemas.common import Success, SuccessExtra
 
 router = APIRouter()
 
-@router.get("/list")
+@router.get("/list", summary="获取角色列表")
 async def get_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -33,7 +33,7 @@ async def get_roles(
     
     return SuccessExtra(data=roles, total=total, page=page, page_size=page_size)
 
-@router.get("/get")
+@router.get("/get", summary="获取角色详情")
 async def get_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),
@@ -51,7 +51,7 @@ async def get_role(
         )
     return Success(data=role)
 
-@router.post("/create")
+@router.post("/create", summary="创建角色")
 async def create_role(
     role_in: RoleCreate,
     db: AsyncSession = Depends(get_db),
@@ -70,7 +70,7 @@ async def create_role(
     await db.refresh(role)
     return Success(data=role)
 
-@router.put("/update")
+@router.put("/update", summary="更新角色")
 async def update_role(
     role_id: int,
     role_in: RoleUpdate,
@@ -96,7 +96,7 @@ async def update_role(
     await db.refresh(role)
     return Success(data=role)
 
-@router.delete("/delete")
+@router.delete("/delete", summary="删除角色")
 async def delete_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),

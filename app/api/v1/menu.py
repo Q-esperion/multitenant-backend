@@ -10,7 +10,7 @@ from app.schemas.common import Success, SuccessExtra
 
 router = APIRouter()
 
-@router.get("/list")
+@router.get("/list", summary="获取菜单列表")
 async def get_menus(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -31,7 +31,7 @@ async def get_menus(
     menus = result.scalars().all()
     return SuccessExtra(data=menus, total=len(menus), page=1, page_size=limit)
 
-@router.post("/create")
+@router.post("/create", summary="创建菜单")
 async def create_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -48,7 +48,7 @@ async def create_menu(
     await db.refresh(menu)
     return Success(data=menu)
 
-@router.get("/get")
+@router.get("/get", summary="获取菜单详情")
 async def get_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -72,7 +72,7 @@ async def get_menu(
         )
     return Success(data=menu)
 
-@router.put("/update")
+@router.put("/update", summary="更新菜单")
 async def update_menu(
     *,
     db: AsyncSession = Depends(get_db),
@@ -103,7 +103,7 @@ async def update_menu(
     await db.refresh(menu)
     return Success(data=menu)
 
-@router.delete("/delete")
+@router.delete("/delete", summary="删除菜单")
 async def delete_menu(
     *,
     db: AsyncSession = Depends(get_db),

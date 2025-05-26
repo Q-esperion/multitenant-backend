@@ -19,7 +19,7 @@ import logging
 router = APIRouter()
 logger = get_logger(__name__)
 
-@router.post("/access_token")
+@router.post("/access_token", summary="用户登录")
 async def login_access_token(
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db)
@@ -82,7 +82,7 @@ async def login_access_token(
     
     return Success(data=data.model_dump())
 
-@router.get("/userinfo")
+@router.get("/userinfo", summary="获取当前用户信息")
 async def get_user_info(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -119,7 +119,7 @@ async def get_user_info(
     
     return Success(data=user_data.model_dump())
 
-@router.get("/usermenu")
+@router.get("/usermenu", summary="获取当前用户菜单")
 async def get_user_menu(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -181,7 +181,7 @@ async def get_user_menu(
     
     return Success(data=root_menus)
 
-@router.get("/userapi")
+@router.get("/userapi", summary="获取当前用户API权限")
 async def get_user_api(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -211,7 +211,7 @@ async def get_user_api(
     api_paths = [api.path for api in apis]
     return Success(data=api_paths)
 
-@router.post("/update_password")
+@router.post("/update_password", summary="修改密码")
 async def update_password(
     password_data: UpdatePasswordRequest,
     db: AsyncSession = Depends(get_db),
