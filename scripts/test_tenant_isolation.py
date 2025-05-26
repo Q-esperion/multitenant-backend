@@ -191,7 +191,7 @@ async def init_test_data():
             # 创建超级管理员用户
             admin_user = User(
                 username="admin",
-                password=encrypt_password("123456"),
+                password=encrypt_password("Admin@123456"),
                 email="admin@example.com",
                 is_active=True,
                 is_superuser=True
@@ -224,7 +224,7 @@ async def main():
     client = TestClient()
     
     # 超级管理员登录
-    await client.login("admin", "123456")
+    await client.login("admin", "Admin@123456")
     
     # 创建租户
     tenant_aa = await client.create_tenant({

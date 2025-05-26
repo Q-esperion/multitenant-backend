@@ -59,7 +59,7 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), default=True),
         sa.Column('is_superuser', sa.Boolean(), default=False),
         sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('dept_id', sa.Integer(), nullable=True),
+        sa.Column('department', sa.String(100), nullable=True),
         sa.Column('tenant_id', sa.Integer(), nullable=True),
         sa.Column('is_tenant_admin', sa.Boolean(), default=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -133,7 +133,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['api_id'], ['apis.id'], ),
         sa.ForeignKeyConstraint(['menu_id'], ['menus.id'], ),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
-        sa.PrimaryKeyConstraint('id')
+        sa.PrimaryKeyConstraint('id'),
+        sa.CheckConstraint(
+            '(menu_id IS NOT NULL AND api_id IS NULL) OR (menu_id IS NULL AND api_id IS NOT NULL)',
+            name='check_menu_or_api'
+        )
     )
 
     # 创建audit_logs表

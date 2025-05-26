@@ -30,13 +30,16 @@ class MenuType(str, enum.Enum):
 class Tenant(BaseModel):
     __tablename__ = "tenants"
     
-    name = Column(String(100), nullable=False)
-    schema_name = Column(String(100), nullable=False, unique=True)
-    status = Column(String(20), default=TenantStatus.ACTIVE.value)
-    description = Column(String(500))
-    max_users = Column(Integer, default=100)
-    expire_date = Column(Date)
-    is_deleted = Column(Boolean, default=False)
+    id = Column(Integer, primary_key=True, index=True, comment="租户ID")
+    name = Column(String(100), nullable=False, comment="租户名称")
+    schema_name = Column(String(100), nullable=False, unique=True, comment="Schema名称")
+    status = Column(String(20), default=TenantStatus.ACTIVE.value, comment="租户状态")
+    description = Column(String(500), comment="租户描述")
+    max_users = Column(Integer, default=100, comment="最大用户数")
+    expire_date = Column(Date, comment="到期时间")
+    is_deleted = Column(Boolean, default=False, comment="是否删除")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
     
     # 关系
     users = relationship("User", back_populates="tenant")
@@ -45,20 +48,20 @@ class Tenant(BaseModel):
 class User(BaseModel):
     __tablename__ = "users"
     
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True, nullable=False)
-    alias = Column(String(50), nullable=True)
-    email = Column(String(100), unique=True, index=True, nullable=True)
-    phone = Column(String(20), nullable=True)
-    password = Column(String(100), nullable=False)
-    is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)
-    last_login = Column(DateTime(timezone=True), nullable=True)
-    department = Column(String(100), nullable=True)  # 部门名称
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
-    is_tenant_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    id = Column(Integer, primary_key=True, index=True, comment="用户ID")
+    username = Column(String(50), unique=True, index=True, nullable=False, comment="用户名")
+    alias = Column(String(50), nullable=True, comment="用户别名")
+    email = Column(String(100), unique=True, index=True, nullable=True, comment="邮箱")
+    phone = Column(String(20), nullable=True, comment="手机号")
+    password = Column(String(100), nullable=False, comment="密码")
+    is_active = Column(Boolean, default=True, comment="是否激活")
+    is_superuser = Column(Boolean, default=False, comment="是否超级管理员")
+    last_login = Column(DateTime(timezone=True), nullable=True, comment="最后登录时间")
+    department = Column(String(100), nullable=True, comment="部门名称")
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, comment="租户ID")
+    is_tenant_admin = Column(Boolean, default=False, comment="是否租户管理员")
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False, comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False, comment="更新时间")
     
     # 关系
     tenant = relationship("Tenant", back_populates="users")
@@ -69,9 +72,12 @@ class User(BaseModel):
 class Role(BaseModel):
     __tablename__ = "roles"
     
-    name = Column(String(50), nullable=False)
-    code = Column(String(50), nullable=False, unique=True)
-    description = Column(String(200))
+    id = Column(Integer, primary_key=True, index=True, comment="角色ID")
+    name = Column(String(50), nullable=False, comment="角色名称")
+    code = Column(String(50), nullable=False, unique=True, comment="角色编码")
+    description = Column(String(200), comment="角色描述")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
     
     # 关系
     role_menus = relationship("RoleMenu", back_populates="role")
@@ -81,15 +87,15 @@ class Role(BaseModel):
 class Api(BaseModel):
     __tablename__ = "apis"
     
-    id = Column(Integer, primary_key=True, index=True)
-    path = Column(String(200), nullable=False)
-    method = Column(String(10), nullable=False)
-    summary = Column(String(200))
-    tags = Column(String(100))
-    description = Column(String(500))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    is_deleted = Column(Boolean, default=False)
+    id = Column(Integer, primary_key=True, index=True, comment="API ID")
+    path = Column(String(200), nullable=False, comment="API路径")
+    method = Column(String(10), nullable=False, comment="请求方法")
+    summary = Column(String(200), comment="接口摘要")
+    tags = Column(String(100), comment="标签")
+    description = Column(String(500), comment="接口描述")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
+    is_deleted = Column(Boolean, default=False, comment="是否删除")
     
     # 关系
     permissions = relationship("TenantPermission", back_populates="api")
@@ -98,7 +104,7 @@ class Api(BaseModel):
 class Menu(BaseModel):
     __tablename__ = "menus"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, comment="菜单ID")
     name = Column(String(50), nullable=False, comment="菜单名称")
     menu_type = Column(String(20), nullable=False, comment="菜单类型")
     path = Column(String(100), nullable=False, comment="菜单路径")
