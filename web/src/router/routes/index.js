@@ -116,6 +116,16 @@ export const basicRoutes = [
       title: '登录页',
     },
   },
+  {
+    path: '/bigscreen',
+    name: 'BigScreen',
+    component: () => import('@/views/bigscreen/index.vue'),
+    meta: {
+      title: '迎新大屏',
+      fullScreen: true, // 可选，便于后续判断
+      isHidden: false    // 可选，不在菜单显示
+    }
+  }
 ]
 
 export const NOT_FOUND_ROUTE = {
