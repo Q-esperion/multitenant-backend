@@ -22,53 +22,20 @@ async def init_data():
         async with AsyncSessionLocal() as session:
             # 清除所有数据
             logger.info("开始清除所有数据...")
-            await session.execute(delete(AuditLog))    # 新增
-            await session.execute(delete(AccessLog))   # 新增
-            await session.execute(delete(RoleApi))
+            # await session.execute(delete(AuditLog))    # 新增
+            # await session.execute(delete(AccessLog))   # 新增
+            # await session.execute(delete(RoleApi))
             await session.execute(delete(RoleMenu))
-            await session.execute(delete(TenantPermission))
-            await session.execute(delete(UserRole))
-            await session.execute(delete(Api))
+            # await session.execute(delete(TenantPermission))
+            # await session.execute(delete(UserRole))
+            # await session.execute(delete(Api))
             await session.execute(delete(Menu))
             # await session.execute(delete(Role))
             # await session.execute(delete(User))
             # await session.execute(delete(Tenant))
             await session.commit()
-            logger.info("数据清除完成")
+            logger.info("原始菜单数据清除完成")
             
-            # 创建超级管理员
-            superuser = User(
-                username="admin",
-                password=get_password_hash("Admin@123456"),
-                email="admin@example.com",
-                is_active=True,
-                is_superuser=True,
-                is_tenant_admin=False
-            )
-            session.add(superuser)
-            await session.flush()
-            
-            # 创建角色
-            roles = [
-                Role(
-                    name="超级管理员",
-                    code="super_admin",
-                    description="系统超级管理员"
-                ),
-                Role(
-                    name="租户管理员",
-                    code="tenant_admin",
-                    description="租户管理员"
-                ),
-                Role(
-                    name="普通用户",
-                    code="normal_user",
-                    description="普通用户"
-                )
-            ]
-            for role in roles:
-                session.add(role)
-            await session.flush()
             
            # 创建菜单
             # 检查是否已存在菜单
@@ -179,24 +146,7 @@ async def init_data():
                 )
                 session.add(top_menu)
             
-            # 创建API
-            # 获取所有API路由
-            apis = generate_api_from_router(api_v1_router)
-            
-            # 创建API记录
-            for api_data in apis:
-                api = Api(
-                    path=api_data["path"],
-                    method=api_data["method"],
-                    summary=api_data["summary"],
-                    tags=api_data["tags"],
-                    created_at=datetime.now(),
-                    updated_at=datetime.now()
-                )
-                session.add(api)
-            
-            await session.commit()
-            logger.info("基础数据初始化完成")
+            logger.info("菜单数据全量更新完成")
     except Exception as e:
         await session.rollback()
         logger.error(f"基础数据初始化失败: {str(e)}")
