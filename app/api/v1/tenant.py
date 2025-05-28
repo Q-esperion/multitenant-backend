@@ -10,6 +10,7 @@ from app.schemas.common import Success, SuccessExtra
 from app.core.log import get_logger
 from app.utils.audit import log_audit
 from datetime import date
+from app.core.tenant_tables import init_tenant_schema
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -20,13 +21,22 @@ async def get_tenants(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100)
+    page_size: int = Query(10, ge=1, le=100),
+    name: str = None,
+    status: str = None
 ) -> Any:
     """
     获取租户列表
     """
-    logger.debug(f"开始获取租户列表，页码: {page}, 每页数量: {page_size}")
+    logger.debug(f"开始获取租户列表，页码: {page}, 每页数量: {page_size}, 搜索参数: name={name}, status={status}")
     query = select(Tenant).where(Tenant.is_deleted == False)
+    
+    # 添加搜索条件
+    if name:
+        query = query.where(Tenant.name.ilike(f"%{name}%"))
+    if status:
+        query = query.where(Tenant.status == status)
+    
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     query = query.offset((page - 1) * page_size).limit(page_size)
     
@@ -34,17 +44,20 @@ async def get_tenants(
     tenants = result.scalars().all()
     logger.debug(f"查询到 {len(tenants)} 个租户")
     
+    # 将 SQLAlchemy 对象转换为 Pydantic 模型
+    tenant_list = [TenantResponse.model_validate(tenant) for tenant in tenants]
+    
     # 记录审计日志
     await log_audit(
         user_id=current_user.id,
         action="list",
         resource_type="tenant",
         resource_id=0,
-        details=f"查询租户列表，页码：{page}，每页数量：{page_size}",
+        details=f"查询租户列表，页码：{page}，每页数量：{page_size}，搜索条件：name={name}, status={status}",
         request=request
     )
     
-    return SuccessExtra(data=tenants, total=total, page=page, page_size=page_size)
+    return SuccessExtra(data=tenant_list, total=total, page=page, page_size=page_size)
 
 @router.post("/create")
 async def create_tenant(
@@ -78,220 +91,23 @@ async def create_tenant(
         await db.commit()
         logger.debug(f"租户 schema_name 已更新为: {tenant.schema_name}")
         
-        # 创建租户schema
-        schema_name = tenant.schema_name
-        try:
-            logger.debug(f"开始创建 Schema: {schema_name}")
-            await db.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
-            logger.debug(f"Schema {schema_name} 创建成功")
-        except Exception as e:
-            logger.error(f"创建 Schema {schema_name} 失败: {str(e)}")
-            raise
+        # 初始化租户 schema 和表
+        await init_tenant_schema(db, tenant.schema_name)
         
-        # 切换到新schema并创建表
-        try:
-            logger.debug(f"开始切换到 Schema: {schema_name}")
-            await db.execute(text(f"SET search_path TO {schema_name}"))
-            logger.debug(f"已切换到 Schema {schema_name}")
-        except Exception as e:
-            logger.error(f"切换 Schema {schema_name} 失败: {str(e)}")
-            raise
+        # 记录审计日志
+        await log_audit(
+            user_id=current_user.id,
+            action="create",
+            resource_type="tenant",
+            resource_id=tenant.id,
+            details=f"创建新租户：{tenant.name}，最大用户数：{tenant.max_users}，到期时间：{tenant.expire_date}",
+            request=request
+        )
         
-        # 创建租户特定的表
-        try:
-            # 1. 创建 admission_batches 表
-            logger.debug("开始创建 admission_batches 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS admission_batches (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    start_date DATE NOT NULL,
-                    end_date DATE NOT NULL,
-                    is_active BOOLEAN DEFAULT FALSE,
-                    description VARCHAR(500),
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("admission_batches 表创建成功")
-            
-            # 2. 创建 departments 表
-            logger.debug("开始创建 departments 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS departments (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    code VARCHAR(50) UNIQUE,
-                    parent_id INTEGER,
-                    "order" INTEGER DEFAULT 0,
-                    leader VARCHAR(50),
-                    phone VARCHAR(20),
-                    email VARCHAR(100),
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("departments 表创建成功")
-            
-            # 3. 创建 dormitories 表
-            logger.debug("开始创建 dormitories 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS dormitories (
-                    id SERIAL PRIMARY KEY,
-                    building VARCHAR(50) NOT NULL,
-                    room_number VARCHAR(20) NOT NULL,
-                    capacity INTEGER DEFAULT 4,
-                    current_count INTEGER DEFAULT 0,
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("dormitories 表创建成功")
-            
-            # 4. 创建 students 表
-            logger.debug("开始创建 students 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS students (
-                    id_card VARCHAR(18) PRIMARY KEY,
-                    student_id VARCHAR(50) UNIQUE,
-                    name VARCHAR(50) NOT NULL,
-                    gender VARCHAR(10),
-                    birth_date DATE,
-                    admission_batch_id INTEGER,
-                    department_id INTEGER,
-                    dormitory_id INTEGER,
-                    phone VARCHAR(20),
-                    email VARCHAR(100),
-                    address VARCHAR(200),
-                    status BOOLEAN DEFAULT TRUE,
-                    ext_field1 VARCHAR(200),
-                    ext_field2 VARCHAR(200),
-                    ext_field3 VARCHAR(200),
-                    ext_field4 VARCHAR(200),
-                    ext_field5 VARCHAR(200),
-                    ext_field6 VARCHAR(200),
-                    ext_field7 VARCHAR(200),
-                    ext_field8 VARCHAR(200),
-                    ext_field9 VARCHAR(200),
-                    ext_field10 VARCHAR(200),
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("students 表创建成功")
-            
-            # 5. 创建 staff 表
-            logger.debug("开始创建 staff 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS staff (
-                    id SERIAL PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    password VARCHAR(100) NOT NULL,
-                    name VARCHAR(50) NOT NULL,
-                    gender VARCHAR(10),
-                    phone VARCHAR(20),
-                    email VARCHAR(100),
-                    department_id INTEGER,
-                    position VARCHAR(50),
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("staff 表创建成功")
-            
-            # 6. 创建 registration_processes 表
-            logger.debug("开始创建 registration_processes 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS registration_processes (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL UNIQUE,
-                    "order" INTEGER NOT NULL,
-                    description VARCHAR(500),
-                    is_required BOOLEAN DEFAULT TRUE,
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("registration_processes 表创建成功")
-            
-            # 6.1 创建 info_entry_processes 表
-            logger.debug("开始创建 info_entry_processes 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS info_entry_processes (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL UNIQUE,
-                    "order" INTEGER NOT NULL,
-                    description VARCHAR(500),
-                    is_required BOOLEAN DEFAULT TRUE,
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("info_entry_processes 表创建成功")
-            
-            # 7. 创建 registration_info 表
-            logger.debug("开始创建 registration_info 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS registration_info (
-                    id SERIAL PRIMARY KEY,
-                    student_id VARCHAR(50) NOT NULL,
-                    process_id INTEGER NOT NULL,
-                    status BOOLEAN DEFAULT FALSE,
-                    completed_at TIMESTAMP WITH TIME ZONE,
-                    operator_id INTEGER,
-                    remarks TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("registration_info 表创建成功")
-            
-            # 8. 创建 field_mappings 表
-            logger.debug("开始创建 field_mappings 表")
-            await db.execute(text("""
-                CREATE TABLE IF NOT EXISTS field_mappings (
-                    id SERIAL PRIMARY KEY,
-                    field_name VARCHAR(50) NOT NULL,
-                    display_name VARCHAR(50) NOT NULL,
-                    is_required BOOLEAN DEFAULT FALSE,
-                    "order" INTEGER DEFAULT 0,
-                    status BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            logger.debug("field_mappings 表创建成功")
-            
-            # 切换回默认schema
-            logger.debug("开始切换回 public schema")
-            await db.execute(text("SET search_path TO public"))
-            logger.debug("已切换回 public schema")
-            
-            # 提交所有更改
-            await db.commit()
-            logger.info(f"租户 {tenant.name} 创建成功")
-            
-            # 记录审计日志
-            await log_audit(
-                user_id=current_user.id,
-                action="create",
-                resource_type="tenant",
-                resource_id=tenant.id,
-                details=f"创建新租户：{tenant.name}，最大用户数：{tenant.max_users}，到期时间：{tenant.expire_date}",
-                request=request
-            )
-            
-            # 使用 Pydantic 模型序列化租户数据
-            tenant_response = TenantResponse.model_validate(tenant)
-            return Success(data=tenant_response.model_dump())
-        except Exception as e:
-            logger.error(f"创建表失败: {str(e)}")
-            raise
+        # 使用 Pydantic 模型序列化租户数据
+        tenant_response = TenantResponse.model_validate(tenant)
+        return Success(data=tenant_response.model_dump())
+        
     except Exception as e:
         # 如果发生错误，回滚事务
         await db.rollback()
@@ -304,7 +120,7 @@ async def create_tenant(
 @router.put("/update")
 async def update_tenant(
     request: Request,
-    tenant_id: int,
+    # tenant_id: int,
     tenant_in: TenantUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
@@ -312,7 +128,7 @@ async def update_tenant(
     """
     更新租户信息
     """
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_in.id))
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(
@@ -320,9 +136,24 @@ async def update_tenant(
             detail="Tenant not found"
         )
     
+    # 允许被前端更新的字段
+    ALLOWED_UPDATE_FIELDS = {"name", "description", "max_users", "expire_date", "status"}
+
     update_data = tenant_in.dict(exclude_unset=True)
+    logger.debug(f"更新租户信息: {update_data}")
+    for field in list(update_data.keys()):
+        if field not in ALLOWED_UPDATE_FIELDS:
+            update_data.pop(field)
+
+    # expire_date 类型转换
+    if 'expire_date' in update_data and update_data['expire_date']:
+        if isinstance(update_data['expire_date'], str):
+            from datetime import datetime
+            update_data['expire_date'] = datetime.fromisoformat(update_data['expire_date']).date()
+
     for field, value in update_data.items():
         setattr(tenant, field, value)
+        logger.debug(f"更新租户字段: {field} = {value}")
     
     await db.commit()
     await db.refresh(tenant)
@@ -337,7 +168,8 @@ async def update_tenant(
         request=request
     )
     
-    return Success(data=tenant)
+    tenant_response = TenantResponse.model_validate(tenant)
+    return Success(data=tenant_response.model_dump())
 
 @router.delete("/delete")
 async def delete_tenant(

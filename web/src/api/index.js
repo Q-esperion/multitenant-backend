@@ -49,4 +49,13 @@ export default {
   createDept: (data = {}) => request.post('/tenant/dept/create', data),
   updateDept: (data = {}) => request.post('/tenant/dept/update', data),
   deleteDept: (params = {}) => request.delete('/tenant/dept/delete', { params }),
+  // 获取租户列表
+  getTenantList: (params = {}) => request.get('/tenant/list', { params }),
+  // 创建租户
+  createTenant: (data = {}) => request.post('/tenant/create', data),
+  // 更新租户
+  updateTenant: (data = {}) => request.put('/tenant/update', data),
+  // 删除租户
+  deleteTenant: (params = {}) => request.delete('/tenant/delete', { params }),
+  
 }

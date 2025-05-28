@@ -249,13 +249,15 @@ class TenantBase(BaseSchema):
     expire_date: Optional[date] = Field(None, description="过期日期")
 
 class TenantCreate(TenantBase):
+    status: Optional[TenantStatus] = None
     pass
 
-class TenantUpdate(BaseSchema):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    max_users: Optional[int] = None
-    expire_date: Optional[date] = None
+class TenantUpdate(TenantBase):
+    id: int
+    # name: Optional[str] = None
+    # description: Optional[str] = None
+    # max_users: Optional[int] = None
+    # expire_date: Optional[date] = None
     status: Optional[TenantStatus] = None
 
 class TenantResponse(TenantBase):

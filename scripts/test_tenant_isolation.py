@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.public import User, Tenant, UserRole, Role
 from app.schemas.tenant import TenantCreate
-from app.core.security import encrypt_password
+from app.core.security import encrypt_password, get_password_hash
 
 # 配置日志
 logging.basicConfig(
@@ -191,7 +191,7 @@ async def init_test_data():
             # 创建超级管理员用户
             admin_user = User(
                 username="admin",
-                password=encrypt_password("Admin@123456"),
+                password=get_password_hash("Admin@123456"),
                 email="admin@example.com",
                 is_active=True,
                 is_superuser=True

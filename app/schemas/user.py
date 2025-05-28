@@ -23,6 +23,7 @@ class UserCreate(UserBase):
     role_ids: Optional[List[int]] = Field(None, description="角色ID列表")
 
 class UserUpdate(BaseSchema):
+    id: int = Field(..., description="用户ID")
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None

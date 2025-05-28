@@ -74,7 +74,7 @@ async def get_logs(
             "details": log.details,
             "ip_address": log.ip_address,
             "user_agent": log.user_agent,
-            "created_at": log.created_at,
+            "created_at": log.created_at if log.created_at else log.updated_at,
             # 从 details 中解析额外信息
             "summary": log.details.split(":")[0] if log.details else None,
             "module": log.resource_type,

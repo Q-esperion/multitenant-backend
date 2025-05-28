@@ -5,6 +5,14 @@
 import asyncio
 import sys
 import os
+from pathlib import Path
+
+# 添加项目根目录到 Python 路径
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+# 在设置路径之后再导入其他模块
 from datetime import datetime
 from sqlalchemy import select, delete
 from app.db.session import AsyncSessionLocal

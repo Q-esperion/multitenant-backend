@@ -16,7 +16,7 @@ class AuditLogCreate(AuditLogBase):
 
 class AuditLogInDBBase(AuditLogBase):
     id: int
-    created_at: datetime
+    created_at: datetime = None
 
     class Config:
         from_attributes = True

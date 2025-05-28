@@ -36,10 +36,10 @@ async def create_user(
             detail="用户名已存在"
         )
     
-    # 权限校验
-    if current_user.is_superuser:
-        # 超级管理员可以为所有租户创建用户
-        pass
+    # # 权限校验
+    # if current_user.is_superuser:
+    #     # 超级管理员可以为所有租户创建用户
+    #     pass
     elif current_user.is_tenant_admin:
         # 租户管理员只能为自己租户创建用户
         if user_in.tenant_id != current_user.tenant_id:
@@ -53,22 +53,23 @@ async def create_user(
             detail="没有创建用户的权限"
         )
     
-    # try:
-    #     # 解密密码
-    #     decrypted_password = decrypt_password(user_in.password)
-    # except ValueError as e:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"密码解密失败: {str(e)}"
-    #     )
+    try:
+        # 解密密码
+        decrypted_password = decrypt_password(user_in.password)
+        logger.debug(f"解密密码: {decrypted_password}")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"密码解密失败: {str(e)}"
+        )
     
     # 创建新用户
     user = User(
         username=user_in.username,
         email=user_in.email,
         phone=user_in.phone,
-        # password=get_password_hash(decrypted_password),
-        password=user_in.password,
+        password=get_password_hash(decrypted_password),
+        # password=user_in.password,
         is_active=user_in.is_active,
         is_superuser=user_in.is_superuser,
         tenant_id=user_in.tenant_id,
@@ -280,10 +281,9 @@ async def get_user(
     
     return Success(data=user_data.model_dump())
 
-@router.put("/update", summary="更新用户")
+@router.post("/update", summary="更新用户")
 async def update_user(
     request: Request,
-    id: int,
     user_in: UserUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -291,7 +291,7 @@ async def update_user(
     """
     更新用户信息
     """
-    result = await db.execute(select(User).where(User.id == id))
+    result = await db.execute(select(User).where(User.id == user_in.id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(

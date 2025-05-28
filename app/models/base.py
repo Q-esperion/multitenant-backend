@@ -1,10 +1,9 @@
 from datetime import datetime
 import pytz
 from sqlalchemy import Column, Integer, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from app.db.base_class import Base
 from app.core.config import settings
 
-Base = declarative_base()
 
 class BaseModel(Base):
     __abstract__ = True

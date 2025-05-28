@@ -1,35 +1,31 @@
-import os
-import sys
-from pathlib import Path
-
-# 添加项目根目录到 Python 路径
-project_root = str(Path(__file__).parent.parent)
-sys.path.append(project_root)
-
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from app.models.public import Base
-from app.core.config import settings
+from pathlib import Path
+import sys
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-
-# 设置数据库 URL，将 postgresql+asyncpg 改为 postgresql+psycopg2
-db_url = settings.SQLALCHEMY_DATABASE_URI.replace("postgresql+asyncpg", "postgresql+psycopg2")
-config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# 添加项目根目录到 Python 路径
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
 # add your model's MetaData object here
 # for 'autogenerate' support
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
+from app.db.base import Base
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

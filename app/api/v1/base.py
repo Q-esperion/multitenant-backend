@@ -31,8 +31,11 @@ async def login_access_token(
     """
     try:
         # 解密密码
+        logger.debug(f"开始解密密码 - 加密数据: {login_data.password[:20]}...")
         decrypted_password = decrypt_password(login_data.password)
+        logger.debug(f"密码解密成功 - 解密后长度: {len(decrypted_password)}")
     except ValueError as e:
+        logger.error(f"密码解密失败: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"密码解密失败: {str(e)}"
@@ -43,12 +46,26 @@ async def login_access_token(
     )
     user = result.scalar_one_or_none()
     
-    if user is None or not verify_password(decrypted_password, user.password):
+    if user is None:
+        logger.error(f"用户不存在: {login_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    logger.debug(f"找到用户: {user.username}, 存储的密码哈希长度: {len(user.password)}")
+    
+    if not verify_password(decrypted_password, user.password):
+        logger.error(f"密码验证失败: {login_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    logger.debug(f"密码验证成功: {login_data.username}")
+    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -228,7 +245,7 @@ async def get_user_api(
     if current_user.is_superuser:
         result = await db.execute(
             select(Api)
-            .where(Api.is_deleted == False)
+            # .where(Api.is_deleted == False)
         )
         apis = result.scalars().all()
     else:

@@ -26,6 +26,7 @@ class MenuCreate(MenuBase):
 
 class MenuUpdate(MenuBase):
     """更新菜单模型"""
+    id: int
     name: Optional[str] = None
     menu_type: Optional[MenuType] = None
     path: Optional[str] = None
@@ -46,10 +47,8 @@ class MenuInDBBase(MenuBase):
     class Config:
         from_attributes = True
 
-class MenuResponse(MenuBase):
+class MenuResponse(MenuInDBBase):
     """菜单响应模型"""
-    id: int
-    parent_id: Optional[int] = None
     children: List['MenuResponse'] = []
 
     class Config:

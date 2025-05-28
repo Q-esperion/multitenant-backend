@@ -30,13 +30,13 @@ class MenuType(str, enum.Enum):
 class Tenant(BaseModel):
     __tablename__ = "tenants"
     
-    id = Column(Integer, primary_key=True, index=True, comment="租户ID")
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="租户ID")
     name = Column(String(100), nullable=False, comment="租户名称")
     schema_name = Column(String(100), nullable=False, unique=True, comment="Schema名称")
     status = Column(String(20), default=TenantStatus.ACTIVE.value, comment="租户状态")
     description = Column(String(500), comment="租户描述")
     max_users = Column(Integer, default=100, comment="最大用户数")
-    expire_date = Column(Date, comment="到期时间")
+    expire_date = Column(Date, nullable=True, comment="到期时间")
     is_deleted = Column(Boolean, default=False, comment="是否删除")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
@@ -49,7 +49,7 @@ class Tenant(BaseModel):
 class User(BaseModel):
     __tablename__ = "users"
     
-    id = Column(Integer, primary_key=True, index=True, comment="用户ID")
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="用户ID")
     username = Column(String(50), unique=True, index=True, nullable=False, comment="用户名")
     alias = Column(String(50), nullable=True, comment="用户别名")
     email = Column(String(100), unique=True, index=True, nullable=True, comment="邮箱")
@@ -73,7 +73,7 @@ class User(BaseModel):
 class Role(BaseModel):
     __tablename__ = "roles"
     
-    id = Column(Integer, primary_key=True, index=True, comment="角色ID")
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="角色ID")
     name = Column(String(50), nullable=False, comment="角色名称")
     code = Column(String(50), nullable=True, unique=True, comment="角色编码")
     description = Column(String(200), comment="角色描述")
@@ -91,7 +91,7 @@ class Role(BaseModel):
 class Api(BaseModel):
     __tablename__ = "apis"
     
-    id = Column(Integer, primary_key=True, index=True, comment="API ID")
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="API ID")
     path = Column(String(200), nullable=False, comment="API路径")
     method = Column(String(10), nullable=False, comment="请求方法")
     summary = Column(String(200), comment="接口摘要")
@@ -108,7 +108,7 @@ class Api(BaseModel):
 class Menu(BaseModel):
     __tablename__ = "menus"
     
-    id = Column(Integer, primary_key=True, index=True, comment="菜单ID")
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="菜单ID")
     name = Column(String(50), nullable=False, comment="菜单名称")
     menu_type = Column(String(20), nullable=False, comment="菜单类型")
     path = Column(String(100), nullable=False, comment="菜单路径")
@@ -132,7 +132,7 @@ class Menu(BaseModel):
 class TenantPermission(BaseModel):
     __tablename__ = "tenant_permissions"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     menu_id = Column(Integer, ForeignKey("menus.id"), nullable=True)
     api_id = Column(Integer, ForeignKey("apis.id"), nullable=True)
@@ -156,7 +156,7 @@ class TenantPermission(BaseModel):
 class AuditLog(BaseModel):
     __tablename__ = "audit_logs"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     action = Column(String(50), nullable=False)
     resource_type = Column(String(50), nullable=False)
@@ -171,7 +171,7 @@ class AuditLog(BaseModel):
 class AccessLog(BaseModel):
     __tablename__ = "access_logs"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     path = Column(String(200), nullable=False)
     method = Column(String(10), nullable=False)

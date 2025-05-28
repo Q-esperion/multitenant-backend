@@ -102,14 +102,19 @@ async function handleQuery() {
     if (props.isPagination && props.remote) {
       paginationParams = { page: pagination.page, page_size: pagination.page_size }
     }
+    // 过滤掉空值
+    const queryParams = Object.fromEntries(
+      Object.entries(props.queryItems).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+    )
     const { data, total } = await props.getData({
-      ...props.queryItems,
+      ...queryParams,
       ...props.extraParams,
       ...paginationParams,
     })
     tableData.value = data
     pagination.itemCount = total || 0
   } catch (error) {
+    console.error('查询数据失败:', error)
     tableData.value = []
     pagination.itemCount = 0
   } finally {

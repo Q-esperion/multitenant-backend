@@ -6,7 +6,7 @@ const ACTIONS = {
   add: '新增',
 }
 
-export default function ({ name, initForm = {}, doCreate, doDelete, doUpdate, refresh }) {
+export default function ({ name, initForm = {}, doCreate, doDelete, doUpdate, refresh, beforeEdit }) {
   const modalVisible = ref(false)
   const modalAction = ref('')
   const modalTitle = computed(() => ACTIONS[modalAction.value] + name)
@@ -25,7 +25,9 @@ export default function ({ name, initForm = {}, doCreate, doDelete, doUpdate, re
   function handleEdit(row) {
     modalAction.value = 'edit'
     modalVisible.value = true
-    modalForm.value = { ...row }
+    // 先调用 beforeEdit 钩子处理数据
+    const processedRow = beforeEdit ? beforeEdit(row) : row
+    modalForm.value = { ...processedRow }
   }
 
   /** 查看 */

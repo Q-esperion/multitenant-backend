@@ -121,7 +121,27 @@ async def create_menu(
         request=request
     )
     
-    return Success(data=MenuResponse.model_validate(menu))
+    # 创建响应数据
+    response_data = {
+        "id": menu.id,
+        "name": menu.name,
+        "menu_type": menu.menu_type,
+        "path": menu.path,
+        "component": menu.component,
+        "icon": menu.icon,
+        "order": menu.order,
+        "parent_id": menu.parent_id,
+        "is_hidden": menu.is_hidden,
+        "keepalive": menu.keepalive,
+        "redirect": menu.redirect,
+        "is_enabled": menu.is_enabled,
+        "created_at": menu.created_at,
+        "updated_at": menu.updated_at,
+        "is_deleted": menu.is_deleted,
+        "children": []
+    }
+    
+    return Success(data=MenuResponse.model_validate(response_data))
 
 @router.get("/get", summary="获取菜单详情")
 async def get_menu(
@@ -166,10 +186,10 @@ async def get_menu(
     
     return Success(data=MenuResponse.model_validate(menu))
 
-@router.put("/update", summary="更新菜单")
+@router.post("/update", summary="更新菜单")
 async def update_menu(
     request: Request,
-    id: int,
+    # id: int,
     menu_in: MenuUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
@@ -177,7 +197,7 @@ async def update_menu(
     """
     更新菜单
     """
-    result = await db.execute(select(Menu).where(Menu.id == id))
+    result = await db.execute(select(Menu).where(Menu.id == menu_in.id))
     menu = result.scalar_one_or_none()
     if not menu:
         raise HTTPException(
@@ -202,7 +222,27 @@ async def update_menu(
         request=request
     )
     
-    return Success(data=MenuResponse.model_validate(menu))
+    # 创建响应数据
+    response_data = {
+        "id": menu.id,
+        "name": menu.name,
+        "menu_type": menu.menu_type,
+        "path": menu.path,
+        "component": menu.component,
+        "icon": menu.icon,
+        "order": menu.order,
+        "parent_id": menu.parent_id,
+        "is_hidden": menu.is_hidden,
+        "keepalive": menu.keepalive,
+        "redirect": menu.redirect,
+        "is_enabled": menu.is_enabled,
+        "created_at": menu.created_at,
+        "updated_at": menu.updated_at,
+        "is_deleted": menu.is_deleted,
+        "children": []
+    }
+    
+    return Success(data=MenuResponse.model_validate(response_data))
 
 @router.delete("/delete", summary="删除菜单")
 async def delete_menu(
