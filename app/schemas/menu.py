@@ -6,7 +6,7 @@ from app.models.public import MenuType
 class MenuBase(BaseModel):
     """菜单基础模型"""
     name: str = Field(..., description="菜单名称")
-    title: str = Field(..., description="菜单标题")
+    # title: Optional[str] = Field(None, description="菜单标题")
     menu_type: MenuType = Field(..., description="菜单类型")
     path: str = Field(..., description="菜单路径")
     component: str = Field(..., description="组件路径")
@@ -21,6 +21,8 @@ class MenuBase(BaseModel):
 class MenuCreate(MenuBase):
     """创建菜单模型"""
     parent_id: Optional[int] = None
+    # title: Optional[str] = None
+    component: Optional[str] = None
 
 class MenuUpdate(MenuBase):
     """更新菜单模型"""
