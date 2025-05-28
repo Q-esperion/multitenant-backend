@@ -66,3 +66,4 @@ logs/
 # Alembic
 alembic/versions/*
 !alembic/versions/__init__.py
+alembic.ini
