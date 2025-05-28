@@ -38,7 +38,7 @@ export default {
   // updateDept: (data = {}) => request.post('/dept/update', data),
   // deleteDept: (params = {}) => request.delete('/dept/delete', { params }),
   // auditlog
-  getAuditLogList: (params = {}) => request.get('/auditlog/list', { params }),
+  getAuditLogList: (params = {}) => request.get('/log/list', { params }),
   // 获取租户部门列表
   getTenantDepts: (params = {}) => request.get('/tenant/dept/list', { params }),
   getTenantDept: (params = {}) => request.get('/tenant/dept/get', { params }),

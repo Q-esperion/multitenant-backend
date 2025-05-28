@@ -22,7 +22,18 @@ class AuditLogInDBBase(AuditLogBase):
         from_attributes = True
 
 class AuditLogResponse(AuditLogInDBBase):
-    pass
+    username: Optional[str] = None
+    summary: Optional[str] = None
+    module: Optional[str] = None
+    method: Optional[str] = None
+    path: Optional[str] = None
+    status: Optional[int] = None
+    request_args: Optional[dict] = None
+    response_body: Optional[dict] = None
+    response_time: Optional[float] = None
+
+    class Config:
+        from_attributes = True
 
 class AccessLogBase(BaseModel):
     user_id: int

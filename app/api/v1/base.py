@@ -14,6 +14,7 @@ from app.schemas.menu import MenuResponse
 from app.schemas.common import Success, SuccessExtra, BaseSchema
 from app.deps import get_current_user, get_current_active_superuser
 from app.core.log import get_logger
+from app.utils.audit import log_audit
 import logging
 
 router = APIRouter()
@@ -21,6 +22,7 @@ logger = get_logger(__name__)
 
 @router.post("/access_token", summary="用户登录")
 async def login_access_token(
+    request: Request,
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -80,10 +82,21 @@ async def login_access_token(
         tenant_id=tenant_id
     )
     
+    # 记录审计日志
+    await log_audit(
+        user_id=user.id,
+        action="login",
+        resource_type="base",
+        resource_id=0,
+        details=f"用户登录，用户名={user.username}",
+        request=request
+    )
+    
     return Success(data=data.model_dump())
 
 @router.get("/userinfo", summary="获取当前用户信息")
 async def get_user_info(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -117,10 +130,21 @@ async def get_user_info(
     # 使用 Pydantic 模型验证和序列化数据
     user_data = UserInfoResponse.model_validate(user_dict)
     
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="get",
+        resource_type="base",
+        resource_id=current_user.id,
+        details=f"查看用户信息：用户名={current_user.username}",
+        request=request
+    )
+    
     return Success(data=user_data.model_dump())
 
 @router.get("/usermenu", summary="获取当前用户菜单")
 async def get_user_menu(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -179,10 +203,21 @@ async def get_user_menu(
             if parent:
                 parent["children"].append(menu_data)
     
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="get",
+        resource_type="base",
+        resource_id=0,
+        details=f"查询用户菜单，用户名={current_user.username}",
+        request=request
+    )
+    
     return Success(data=root_menus)
 
 @router.get("/userapi", summary="获取当前用户API权限")
 async def get_user_api(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -209,10 +244,22 @@ async def get_user_api(
         apis = result.scalars().all()
     
     api_paths = [api.path for api in apis]
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="get",
+        resource_type="base",
+        resource_id=0,
+        details=f"查询用户API权限，用户名={current_user.username}",
+        request=request
+    )
+    
     return Success(data=api_paths)
 
 @router.post("/update_password", summary="修改密码")
 async def update_password(
+    request: Request,
     password_data: UpdatePasswordRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -240,5 +287,15 @@ async def update_password(
     # 更新密码
     current_user.password = get_password_hash(new_password)
     await db.commit()
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="base",
+        resource_id=current_user.id,
+        details=f"更新密码，用户名={current_user.username}",
+        request=request
+    )
     
     return Success(data={"msg": "密码修改成功"}) 

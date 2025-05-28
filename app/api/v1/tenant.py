@@ -1,5 +1,5 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from app.db.session import get_db
@@ -8,6 +8,7 @@ from app.models.public import Tenant, User, TenantStatus
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
 from app.schemas.common import Success, SuccessExtra
 from app.core.log import get_logger
+from app.utils.audit import log_audit
 from datetime import date
 
 router = APIRouter()
@@ -15,6 +16,7 @@ logger = get_logger(__name__)
 
 @router.get("/list")
 async def get_tenants(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser),
     page: int = Query(1, ge=1),
@@ -32,10 +34,21 @@ async def get_tenants(
     tenants = result.scalars().all()
     logger.debug(f"查询到 {len(tenants)} 个租户")
     
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="list",
+        resource_type="tenant",
+        resource_id=0,
+        details=f"查询租户列表，页码：{page}，每页数量：{page_size}",
+        request=request
+    )
+    
     return SuccessExtra(data=tenants, total=total, page=page, page_size=page_size)
 
 @router.post("/create")
 async def create_tenant(
+    request: Request,
     tenant_in: TenantCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
@@ -263,6 +276,16 @@ async def create_tenant(
             await db.commit()
             logger.info(f"租户 {tenant.name} 创建成功")
             
+            # 记录审计日志
+            await log_audit(
+                user_id=current_user.id,
+                action="create",
+                resource_type="tenant",
+                resource_id=tenant.id,
+                details=f"创建新租户：{tenant.name}，最大用户数：{tenant.max_users}，到期时间：{tenant.expire_date}",
+                request=request
+            )
+            
             # 使用 Pydantic 模型序列化租户数据
             tenant_response = TenantResponse.model_validate(tenant)
             return Success(data=tenant_response.model_dump())
@@ -280,6 +303,7 @@ async def create_tenant(
 
 @router.put("/update")
 async def update_tenant(
+    request: Request,
     tenant_id: int,
     tenant_in: TenantUpdate,
     db: AsyncSession = Depends(get_db),
@@ -302,10 +326,22 @@ async def update_tenant(
     
     await db.commit()
     await db.refresh(tenant)
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="tenant",
+        resource_id=tenant.id,
+        details=f"更新租户：{tenant.name}，修改字段：{', '.join(update_data.keys())}",
+        request=request
+    )
+    
     return Success(data=tenant)
 
 @router.delete("/delete")
 async def delete_tenant(
+    request: Request,
     tenant_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
@@ -321,6 +357,18 @@ async def delete_tenant(
             detail="Tenant not found"
         )
     
+    tenant_name = tenant.name
     tenant.is_deleted = True
     await db.commit()
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="delete",
+        resource_type="tenant",
+        resource_id=tenant_id,
+        details=f"删除租户：{tenant_name}",
+        request=request
+    )
+    
     return Success(data={"message": "Tenant deleted successfully"}) 

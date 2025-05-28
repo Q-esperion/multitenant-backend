@@ -105,10 +105,10 @@ async def create_user(
         # 记录审计日志
         await log_audit(
             user_id=current_user.id,
-            action="create_user",
+            action="create",
             resource_type="user",
             resource_id=user.id,
-            details=f"Created new user: {user.username}",
+            details=f"创建新用户：{user.username}",
             request=request
         )
         
@@ -147,7 +147,9 @@ async def get_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     username: str = None,
-    email: str = None
+    email: str = None,
+    phone: str = None,
+    status: bool = None
 ) -> Any:
     """
     获取用户列表
@@ -158,6 +160,10 @@ async def get_users(
         query = query.where(User.username.ilike(f"%{username}%"))
     if email:
         query = query.where(User.email.ilike(f"%{email}%"))
+    if phone:
+        query = query.where(User.phone == phone)
+    if status is not None:
+        query = query.where(User.is_active == status)
     
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -185,7 +191,7 @@ async def get_users(
         action="list",
         resource_type="user",
         resource_id=0,
-        details=f"Listed users with filters: username={username}, email={email}",
+        details=f"查询用户列表，筛选条件：用户名={username}, 邮箱={email}, 手机号={phone}, 状态={status}",
         request=request
     )
     
@@ -249,8 +255,8 @@ async def get_user(
         user_id=current_user.id,
         action="get",
         resource_type="user",
-        resource_id=id,
-        details=f"Viewed user details",
+        resource_id=user.id,
+        details=f"查看用户详情：{user.username}",
         request=request
     )
     
@@ -338,10 +344,10 @@ async def update_user(
     # 记录审计日志
     await log_audit(
         user_id=current_user.id,
-        action="update_user",
+        action="update",
         resource_type="user",
-        resource_id=id,
-        details=f"Updated user fields: {', '.join(update_data.keys())}",
+        resource_id=user.id,
+        details=f"更新用户：{user.username}，修改字段：{', '.join(update_data.keys())}",
         request=request
     )
     
@@ -389,10 +395,10 @@ async def delete_user(
     # 记录审计日志
     await log_audit(
         user_id=current_user.id,
-        action="delete_user",
+        action="delete",
         resource_type="user",
         resource_id=user_id,
-        details=f"Deleted user",
+        details=f"删除用户：{user.username}",
         request=request
     )
     
@@ -457,11 +463,310 @@ async def reset_password(
     # 记录审计日志
     await log_audit(
         user_id=current_user.id,
-        action="reset_password",
+        action="update",
         resource_type="user",
         resource_id=user.id,
-        details=f"Reset password for user: {user.username}",
+        details=f"更新用户密码：{user.username}",
         request=request
     )
     
-    return Success(data={"message": success_message}) 
+    return Success(data={"message": success_message})
+
+@router.put("/update_status", summary="更新用户状态")
+async def update_user_status(
+    request: Request,
+    id: int,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    更新用户状态
+    """
+    result = await db.execute(select(User).where(User.id == id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="用户不存在"
+        )
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "is_active" in update_data:
+        user.is_active = update_data["is_active"]
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"更新用户状态：{user.username}，新状态：{user.is_active}",
+        request=request
+    )
+    
+    # 创建基础用户数据字典
+    user_dict = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "is_active": user.is_active,
+        "tenant_id": user.tenant_id,
+        "is_tenant_admin": user.is_tenant_admin,
+        "is_superuser": user.is_superuser,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+        "roles": []
+    }
+    
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump())
+
+@router.put("/update_roles", summary="更新用户角色")
+async def update_user_roles(
+    request: Request,
+    id: int,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    更新用户角色
+    """
+    result = await db.execute(select(User).where(User.id == id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="用户不存在"
+        )
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "role_ids" in update_data:
+        # 删除原有角色
+        await db.execute(
+            UserRole.__table__.delete().where(UserRole.user_id == user.id)
+        )
+        # 添加新角色
+        for role_id in update_data["role_ids"]:
+            user_role = UserRole(user_id=user.id, role_id=role_id)
+            db.add(user_role)
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    # 获取用户角色信息
+    role_result = await db.execute(
+        select(Role)
+        .join(UserRole)
+        .where(UserRole.user_id == user.id)
+    )
+    roles = role_result.scalars().all()
+    user_roles = [
+        {"id": role.id, "name": role.name}
+        for role in roles
+    ]
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"更新用户角色：{user.username}，角色ID：{', '.join(map(str, update_data['role_ids']))}",
+        request=request
+    )
+    
+    # 创建基础用户数据字典
+    user_dict = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "is_active": user.is_active,
+        "tenant_id": user.tenant_id,
+        "is_tenant_admin": user.is_tenant_admin,
+        "is_superuser": user.is_superuser,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+        "roles": user_roles
+    }
+    
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump())
+
+@router.put("/update_menus", summary="更新用户菜单权限")
+async def update_user_menus(
+    request: Request,
+    id: int,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    更新用户菜单权限
+    """
+    result = await db.execute(select(User).where(User.id == id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="用户不存在"
+        )
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "menu_ids" in update_data:
+        user.menu_ids = update_data["menu_ids"]
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"更新用户菜单权限：{user.username}，菜单ID：{', '.join(map(str, update_data['menu_ids']))}",
+        request=request
+    )
+    
+    # 创建基础用户数据字典
+    user_dict = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "is_active": user.is_active,
+        "tenant_id": user.tenant_id,
+        "is_tenant_admin": user.is_tenant_admin,
+        "is_superuser": user.is_superuser,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+        "roles": []
+    }
+    
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump())
+
+@router.put("/update_apis", summary="更新用户API权限")
+async def update_user_apis(
+    request: Request,
+    id: int,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    更新用户API权限
+    """
+    result = await db.execute(select(User).where(User.id == id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="用户不存在"
+        )
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "api_ids" in update_data:
+        user.api_ids = update_data["api_ids"]
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"更新用户API权限：{user.username}，API ID：{', '.join(map(str, update_data['api_ids']))}",
+        request=request
+    )
+    
+    # 创建基础用户数据字典
+    user_dict = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "is_active": user.is_active,
+        "tenant_id": user.tenant_id,
+        "is_tenant_admin": user.is_tenant_admin,
+        "is_superuser": user.is_superuser,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+        "roles": []
+    }
+    
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump())
+
+@router.put("/update_tenants", summary="更新用户租户权限")
+async def update_user_tenants(
+    request: Request,
+    id: int,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    更新用户租户权限
+    """
+    result = await db.execute(select(User).where(User.id == id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="用户不存在"
+        )
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "tenant_ids" in update_data:
+        user.tenant_ids = update_data["tenant_ids"]
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    # 记录审计日志
+    await log_audit(
+        user_id=current_user.id,
+        action="update",
+        resource_type="user",
+        resource_id=user.id,
+        details=f"更新用户租户权限：{user.username}，租户ID：{', '.join(map(str, update_data['tenant_ids']))}",
+        request=request
+    )
+    
+    # 创建基础用户数据字典
+    user_dict = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "is_active": user.is_active,
+        "tenant_id": user.tenant_id,
+        "is_tenant_admin": user.is_tenant_admin,
+        "is_superuser": user.is_superuser,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+        "roles": []
+    }
+    
+    # 使用 Pydantic 模型验证和序列化数据
+    user_data = UserInfoResponse.model_validate(user_dict)
+    
+    return Success(data=user_data.model_dump()) 
