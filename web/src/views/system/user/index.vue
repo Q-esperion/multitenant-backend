@@ -88,7 +88,7 @@ onMounted(async () => {
   }
   
   $table.value?.handleSearch()
-  api.getRoleList({ page: 1, page_size: 9999 }).then((res) => {
+  api.getRoleList({ page: 1, page_size: 999 }).then((res) => {
     console.log('角色列表加载完成:', res.data)
     roleOption.value = res.data
   })

@@ -44,6 +44,7 @@ class Tenant(BaseModel):
     # 关系
     users = relationship("User", back_populates="tenant")
     permissions = relationship("TenantPermission", back_populates="tenant")
+    roles = relationship("Role", back_populates="tenant")
 
 class User(BaseModel):
     __tablename__ = "users"
@@ -74,8 +75,10 @@ class Role(BaseModel):
     
     id = Column(Integer, primary_key=True, index=True, comment="角色ID")
     name = Column(String(50), nullable=False, comment="角色名称")
-    code = Column(String(50), nullable=False, unique=True, comment="角色编码")
+    code = Column(String(50), nullable=True, unique=True, comment="角色编码")
     description = Column(String(200), comment="角色描述")
+    is_superuser_only = Column(Boolean, default=False, comment="是否仅超级管理员可见")
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, comment="租户ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
     
@@ -83,6 +86,7 @@ class Role(BaseModel):
     role_menus = relationship("RoleMenu", back_populates="role")
     role_apis = relationship("RoleApi", back_populates="role")
     users = relationship("User", secondary="user_roles", back_populates="roles")
+    tenant = relationship("Tenant", back_populates="roles")
 
 class Api(BaseModel):
     __tablename__ = "apis"
