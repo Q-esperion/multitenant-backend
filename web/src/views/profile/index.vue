@@ -6,6 +6,7 @@ import CommonPage from '@/components/page/CommonPage.vue'
 import { useUserStore } from '@/store'
 import api from '@/api'
 import { is } from '~/src/utils'
+import CryptoJS from 'crypto-js'
 
 const { t } = useI18n()
 const userStore = useUserStore()
@@ -56,21 +57,62 @@ async function updatePassword() {
   isLoading.value = true
   passwordFormRef.value?.validate(async (err) => {
     if (!err) {
-      const data = { ...passwordForm.value, id: userStore.userId }
-      await api
-        .updatePassword(data)
-        .then((res) => {
-          $message.success(res.msg)
-          passwordForm.value = {
-            old_password: '',
-            new_password: '',
-            confirm_password: '',
-          }
-          isLoading.value = false
+      try {
+        // 获取密钥，如果环境变量未设置，使用默认值
+        const defaultKey = 'default-aes-secret-key-32-chars-long'
+        const keyStr = (import.meta.env.VITE_AES_SECRET_KEY || defaultKey).slice(0, 32)
+        const key = CryptoJS.enc.Utf8.parse(keyStr)
+        
+        // 生成16字节随机IV
+        const ivArray = window.crypto.getRandomValues(new Uint8Array(16))
+        // 转为WordArray
+        const ivWordArray = CryptoJS.lib.WordArray.create(ivArray)
+        
+        // 加密所有密码
+        const encryptPassword = (password) => {
+          const cipher = CryptoJS.AES.encrypt(password, key, {
+            iv: ivWordArray,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+          })
+          // iv 用标准 base64 编码
+          const ivBase64 = btoa(String.fromCharCode(...ivArray))
+          // 返回加密后的密码对象
+          return JSON.stringify({
+            iv: ivBase64,
+            ciphertext: cipher.toString()
+          })
+        }
+
+        const data = {
+          old_password: encryptPassword(passwordForm.value.old_password),
+          new_password: encryptPassword(passwordForm.value.new_password),
+          confirm_password: encryptPassword(passwordForm.value.confirm_password),
+          id: userStore.userId
+        }
+
+        console.log('加密后的密码参数:', {
+          ...data,
+          old_password: '******',
+          new_password: '******',
+          confirm_password: '******'
         })
-        .catch(() => {
-          isLoading.value = false
-        })
+
+        const res = await api.updatePassword(data)
+        $message.success(res.msg)
+        passwordForm.value = {
+          old_password: '',
+          new_password: '',
+          confirm_password: '',
+        }
+      } catch (error) {
+        console.error('更新密码失败:', error)
+        $message.error(error.message || '更新密码失败')
+      } finally {
+        isLoading.value = false
+      }
+    } else {
+      isLoading.value = false
     }
   })
 }

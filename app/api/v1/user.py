@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.db.session import get_db
 from app.deps import get_current_user
-from app.models.public import User, Role, UserRole
+from app.models.public import User, Role, UserRole, Tenant
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserInfoResponse, ResetPasswordRequest
 from app.schemas.common import Success, SuccessExtra, BaseSchema
 from app.core.security import get_password_hash, decrypt_password
@@ -53,21 +53,22 @@ async def create_user(
             detail="没有创建用户的权限"
         )
     
-    try:
-        # 解密密码
-        decrypted_password = decrypt_password(user_in.password)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"密码解密失败: {str(e)}"
-        )
+    # try:
+    #     # 解密密码
+    #     decrypted_password = decrypt_password(user_in.password)
+    # except ValueError as e:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"密码解密失败: {str(e)}"
+    #     )
     
     # 创建新用户
     user = User(
         username=user_in.username,
         email=user_in.email,
         phone=user_in.phone,
-        password=get_password_hash(decrypted_password),
+        # password=get_password_hash(decrypted_password),
+        password=user_in.password,
         is_active=user_in.is_active,
         is_superuser=user_in.is_superuser,
         tenant_id=user_in.tenant_id,
@@ -151,7 +152,8 @@ async def get_users(
     """
     获取用户列表
     """
-    query = select(User)
+    # 修改查询，包含租户信息
+    query = select(User, Tenant.name.label('tenant_name')).outerjoin(Tenant, User.tenant_id == Tenant.id)
     if username:
         query = query.where(User.username.ilike(f"%{username}%"))
     if email:
@@ -161,11 +163,11 @@ async def get_users(
     query = query.offset((page - 1) * page_size).limit(page_size)
     
     result = await db.execute(query)
-    users = result.scalars().all()
+    users_with_tenant = result.all()
     
     # 获取用户角色信息
     user_roles = {}
-    for user in users:
+    for user, _ in users_with_tenant:
         role_result = await db.execute(
             select(Role)
             .join(UserRole)
@@ -189,7 +191,7 @@ async def get_users(
     
     # 使用 Pydantic 模型序列化用户数据
     user_list = []
-    for user in users:
+    for user, tenant_name in users_with_tenant:
         # 创建基础用户数据字典
         user_dict = {
             "id": user.id,
@@ -198,6 +200,7 @@ async def get_users(
             "phone": user.phone,
             "is_active": user.is_active,
             "tenant_id": user.tenant_id,
+            "tenant_name": tenant_name,  # 添加租户名称
             "is_tenant_admin": user.is_tenant_admin,
             "is_superuser": user.is_superuser,
             "created_at": user.created_at,
@@ -365,14 +368,14 @@ async def update_user(
 @router.delete("/delete", summary="删除用户")
 async def delete_user(
     request: Request,
-    id: int,
+    user_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     删除用户
     """
-    result = await db.execute(select(User).where(User.id == id))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(
@@ -388,7 +391,7 @@ async def delete_user(
         user_id=current_user.id,
         action="delete_user",
         resource_type="user",
-        resource_id=id,
+        resource_id=user_id,
         details=f"Deleted user",
         request=request
     )
@@ -398,7 +401,8 @@ async def delete_user(
 @router.post("/reset_password", summary="重置用户密码")
 async def reset_password(
     request: Request,
-    id: int,
+    # user_id: int,
+    # password_data: ResetPasswordRequest = None,
     password_data: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -416,7 +420,7 @@ async def reset_password(
         )
     
     # 获取用户
-    result = await db.execute(select(User).where(User.id == id))
+    result = await db.execute(select(User).where(User.id == password_data.user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(
@@ -455,7 +459,7 @@ async def reset_password(
         user_id=current_user.id,
         action="reset_password",
         resource_type="user",
-        resource_id=id,
+        resource_id=user.id,
         details=f"Reset password for user: {user.username}",
         request=request
     )

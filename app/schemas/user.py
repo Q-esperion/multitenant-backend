@@ -14,6 +14,7 @@ class UserBase(BaseSchema):
     phone: Optional[str] = Field(None, description="手机号")
     is_active: bool = Field(True, description="是否激活")
     tenant_id: Optional[int] = Field(None, description="租户ID")
+    tenant_name: Optional[str] = Field(None, description="租户名称")
     is_tenant_admin: bool = Field(False, description="是否租户管理员")
     is_superuser: bool = Field(False, description="是否超级管理员")
 
@@ -73,6 +74,7 @@ class PasswordValidator(BaseSchema):
         return v
 
 class ResetPasswordRequest(BaseSchema):
+    user_id: int = Field(..., description="用户ID")
     new_password: Optional[str] = Field(None, description="新密码")
 
     @validator("new_password")

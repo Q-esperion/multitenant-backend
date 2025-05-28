@@ -11,6 +11,9 @@ export const useUserStore = defineStore('user', {
     }
   },
   getters: {
+    user() {
+      return this.userInfo
+    },
     userId() {
       return this.userInfo?.id
     },
@@ -36,16 +39,28 @@ export const useUserStore = defineStore('user', {
   actions: {
     async getUserInfo() {
       try {
+        console.log('开始获取用户信息')
         const res = await api.getUserInfo()
+        console.log('获取用户信息响应:', res)
+        
         if (res.code === 401) {
+          console.log('用户未授权，执行登出')
           this.logout()
-          return
+          return null
         }
+        
+        if (!res.data) {
+          console.error('用户信息数据为空')
+          return null
+        }
+        
         const { id, username, email, avatar, roles, is_superuser, is_active } = res.data
         this.userInfo = { id, username, email, avatar, roles, is_superuser, is_active }
-        return res.data
+        console.log('更新后的用户信息:', this.userInfo)
+        return this.userInfo
       } catch (error) {
-        return error
+        console.error('获取用户信息失败:', error)
+        return null
       }
     },
     async logout() {
