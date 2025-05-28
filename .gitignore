@@ -62,3 +62,7 @@ logs/
 .env.development.local
 .env.test.local
 .env.production.local 
+
+# Alembic
+alembic/versions/*
+!alembic/versions/__init__.py
