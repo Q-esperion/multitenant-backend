@@ -53,12 +53,17 @@ const {
 
     if (form.expire_date) {
       try {
-        const date = new Date(form.expire_date)
-        console.log('【beforeEdit】转换后 date:', date)
-        if (!isNaN(date.getTime())) {
-          form.expire_date = date
+        // 如果已经是时间戳格式，直接使用
+        if (typeof form.expire_date === 'number') {
+          form.expire_date = form.expire_date
         } else {
-          form.expire_date = null
+          // 尝试转换为时间戳
+          const date = new Date(form.expire_date)
+          if (!isNaN(date.getTime())) {
+            form.expire_date = date.getTime()
+          } else {
+            form.expire_date = null
+          }
         }
       } catch (error) {
         console.error('【beforeEdit】日期转换失败', error)
@@ -87,11 +92,22 @@ function formatTenantForm(form) {
   const data = { ...form }
   if (data.expire_date) {
     try {
-      const date = new Date(data.expire_date)
-      if (!isNaN(date.getTime())) {
-        data.expire_date = format(date, 'yyyy-MM-dd')
+      // 如果是时间戳，转换为日期字符串
+      if (typeof data.expire_date === 'number') {
+        const date = new Date(data.expire_date)
+        if (!isNaN(date.getTime())) {
+          data.expire_date = format(date, 'yyyy-MM-dd')
+        } else {
+          data.expire_date = null
+        }
       } else {
-        data.expire_date = null
+        // 如果是日期对象或字符串，直接格式化
+        const date = new Date(data.expire_date)
+        if (!isNaN(date.getTime())) {
+          data.expire_date = format(date, 'yyyy-MM-dd')
+        } else {
+          data.expire_date = null
+        }
       }
     } catch (error) {
       console.error('日期格式化错误:', error)
@@ -284,7 +300,7 @@ const columns = [
       v-model:visible="modalVisible"
       :title="modalTitle"
       :loading="modalLoading"
-      @onSave="handleSave"
+      @Save="handleSave"
     >
       <NForm
         ref="modalFormRef"
@@ -327,7 +343,7 @@ const columns = [
             clearable
             :default-value="null"
             placeholder="请选择到期时间"
-            value-format="yyyy-MM-dd"
+            value-format="timestamp"
           />
         </NFormItem>
         <NFormItem label="状态" path="status">
