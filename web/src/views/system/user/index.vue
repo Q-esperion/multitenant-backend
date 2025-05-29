@@ -17,6 +17,7 @@ import {
   NLayoutContent,
   NTreeSelect,
 } from 'naive-ui'
+import CryptoJS from 'crypto-js'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
@@ -41,7 +42,7 @@ const {
   modalTitle,
   modalAction,
   modalLoading,
-  handleSave,
+  handleSave: baseHandleSave,
   modalForm,
   modalFormRef,
   handleEdit,
@@ -352,7 +353,7 @@ const validateAddUser = {
       trigger: ['blur'],
       validator: (rule, value, callback) => {
         const re = /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/
-        if (!re.test(modalForm.value.email)) {
+        if (!re.test(value)) {
           callback('邮箱格式错误')
           return
         }
@@ -384,11 +385,18 @@ const validateAddUser = {
       },
     },
   ],
-  roles: [
+  role_ids: [
     {
       type: 'array',
       required: true,
       message: '请至少选择一个角色',
+      trigger: ['blur', 'change'],
+    },
+  ],
+  dept_id: [
+    {
+      required: true,
+      message: '请选择部门',
       trigger: ['blur', 'change'],
     },
   ],
@@ -494,6 +502,56 @@ const formItems = computed(() => {
   console.log('最终表单项配置:', baseItems)
   return baseItems
 })
+
+// 重写handleSave函数，添加密码加密逻辑
+async function handleSave() {
+  console.log('开始保存操作')
+  console.log('操作类型:', modalAction.value)
+  console.log('表单数据:', modalForm.value)
+  console.log('表单引用:', modalFormRef.value)
+
+  try {
+    await modalFormRef.value?.validate()
+    console.log('表单验证通过')
+
+    // 如果是新增用户，需要加密密码
+    if (modalAction.value === 'add' && modalForm.value.password) {
+      // 获取密钥，如果环境变量未设置，使用默认值
+      const defaultKey = 'default-aes-secret-key-32-chars-long'
+      const keyStr = (import.meta.env.VITE_AES_SECRET_KEY || defaultKey).slice(0, 32)
+      const key = CryptoJS.enc.Utf8.parse(keyStr)
+      
+      // 生成16字节随机IV
+      const ivArray = window.crypto.getRandomValues(new Uint8Array(16))
+      // 转为WordArray
+      const ivWordArray = CryptoJS.lib.WordArray.create(ivArray)
+      
+      // 加密密码
+      const cipher = CryptoJS.AES.encrypt(modalForm.value.password, key, {
+        iv: ivWordArray,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      })
+      // iv 用标准 base64 编码
+      const ivBase64 = btoa(String.fromCharCode(...ivArray))
+      // 密文本身就是base64
+      const encryptedPassword = JSON.stringify({
+        iv: ivBase64,
+        ciphertext: cipher.toString()
+      })
+      
+      // 同时更新密码和确认密码字段
+      modalForm.value.password = encryptedPassword
+      modalForm.value.confirmPassword = encryptedPassword
+    }
+
+    // 调用原始的handleSave函数
+    await baseHandleSave()
+  } catch (error) {
+    console.error('保存失败:', error)
+    $message.error(error.message || '保存失败')
+  }
+}
 </script>
 
 <template>

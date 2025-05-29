@@ -36,10 +36,10 @@ async def create_user(
             detail="用户名已存在"
         )
     
-    # # 权限校验
-    # if current_user.is_superuser:
-    #     # 超级管理员可以为所有租户创建用户
-    #     pass
+    # 权限校验
+    if current_user.is_superuser:
+        # 超级管理员可以为所有租户创建用户
+        pass
     elif current_user.is_tenant_admin:
         # 租户管理员只能为自己租户创建用户
         if user_in.tenant_id != current_user.tenant_id:
